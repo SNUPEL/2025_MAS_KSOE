@@ -1,8 +1,7 @@
-import simpy
 import pandas as pd
 
 
-class BLock:
+class Block:
     def __init__(self,
                  name=None,
                  id=None,
@@ -15,8 +14,8 @@ class BLock:
                  length=None,
                  breadth=None,
                  height=None,
-                 h1_workload=None,
-                 h2_workload=None):
+                 workload_h1=None,
+                 workload_h2=None):
 
         self.name = name
         self.id = id
@@ -29,8 +28,8 @@ class BLock:
         self.length = length
         self.breadth = breadth
         self.height = height
-        self.h1_workload = h1_workload
-        self.h2_workload = h2_workload
+        self.workload_h1 = workload_h1
+        self.workload_h2 = workload_h2
 
         self.allocated_bay = None
 
@@ -38,16 +37,16 @@ class BLock:
 class Team:
     def __init__(self,
                  name=None,
-                 num_h1_workers=None,
-                 num_h2_workers=None,
-                 h1_capacity=None,
-                 h2_capacity=None):
+                 num_workers_h1=None,
+                 num_workers_h2=None,
+                 capacity_h1=None,
+                 capacity_h2=None):
 
         self.name = name
-        self.num_h1_workers = num_h1_workers
-        self.num_h2_workers = num_h2_workers
-        self.h1_capacity = h1_capacity
-        self.h2_capacity = h2_capacity
+        self.num_workers_h1 = num_workers_h1
+        self.num_workers_h2 = num_workers_h2
+        self.capacity_h1 = capacity_h1
+        self.capacity_h2 = capacity_h2
 
 
 class Source:
@@ -55,17 +54,17 @@ class Source:
                  env,
                  name='Source',
                  blocks=None,
-                 model=None,
+                 bays=None,
                  monitor=None):
 
         self.env = env
         self.name = name
         self.blocks = blocks
-        self.model = model
+        self.bays = bays
         self.monitor = monitor
 
         self.sent = 0
-        self.call_for_machine_scehduling = {}
+        self.call_for_machine_scheduling = {}
         self.process = env.process(self._generate())
 
     def _generate(self):
@@ -86,16 +85,16 @@ class Source:
                 break
 
     def _run(self, block):
-        self.monitor.add_to_queue(block, scheduling_mode="machine")
-        self.monitor.set_scheduling_flag(scheduling_mode="machine")
-        self.call_for_machine_scehduling[block.id] = self.env.event()
+        self.monitor.add_to_queue(block, agent="agent1")
+        self.monitor.set_scheduling_flag(scheduling_mode="machine_scheduling")
+        self.call_for_machine_scheduling[block.id] = self.env.event()
 
-        bay_name = yield self.call_for_machine_scehduling[block.id]
+        bay_name = yield self.call_for_machine_scheduling[block.id]
         block.allocated_bay = bay_name
 
-        self.model[bay_name].put(block)
+        self.bays[bay_name].put(block)
 
-        del self.call_for_machine_scehduling[block.id]
+        del self.call_for_machine_scheduling[block.id]
         del self.monitor.blocks_unscheduled[block.id]
 
 
@@ -107,7 +106,11 @@ class Bay:
                  team=None,
                  length=None,
                  breadth=None,
-                 model=None,
+                 block_breadth=None,
+                 block_height=None,
+                 block_weight=None,
+                 block_turnover_weight=None,
+                 sink=None,
                  monitor=None):
 
         self.env = env
@@ -116,7 +119,11 @@ class Bay:
         self.team = team
         self.length = length
         self.breadth = breadth
-        self.model = model
+        self.block_breadth = block_breadth
+        self.block_height = block_height
+        self.block_weight = block_weight
+        self.block_turnover_weight = block_turnover_weight
+        self.sink = sink
         self.monitor = monitor
 
         self.processes = {}
@@ -131,7 +138,7 @@ class Bay:
 
     def _work(self, block):
         # 공간 배치 알고리즘 추후 연결
-        # self.monitor.add_to_queue(block, scheduling_mode="spatial_arrangement")
+        # self.monitor.add_to_queue(block, agent="agent3")
         # self.monitor.set_scheduling_flag(scheduling_mode="spatial_arrangement")
         #
         # self.call_for_spatial_arrangement[block.id] = self.env.event()
@@ -157,7 +164,7 @@ class Bay:
 
         del self.monitor.blocks_working[block.id]
 
-        self.model['Sink'].put(block)
+        self.sink.put(block)
 
 
 class Sink:
@@ -186,10 +193,13 @@ class Monitor:
 
         self.use_recording = use_recording
 
-        self.queue_for_machine_scheduling = {}
-        self.queue_for_spatial_arrangement = None
-        self.machine_scheduling = False
-        self.spatial_arrangement = False
+        self.queue_for_agent1 = {}
+        self.queue_for_agent2 = None
+        self.queue_for_agent3 = None
+
+        self.call_agent1 = False
+        self.call_agent2 = False
+        self.call_agent3 = False
 
         self.time = []
         self.block = []
@@ -201,38 +211,48 @@ class Monitor:
                             scheduling_mode='machine_scheduling'):
 
         if scheduling_mode == 'machine_scheduling':
-            self.machine_scheduling = True
+            self.call_agent1 = True
         elif scheduling_mode == 'spatial_arrangement':
-            self.spatial_arrangement = True
+            self.call_agent3 = True
         else:
             print("Invalid scheduling mode")
 
     def add_to_queue(self,
                      block,
-                     scheduling_mode='machine_scheduling'):
+                     agent="agent1"):
 
-        if scheduling_mode == "machine_scheduling":
-            self.queue_for_machine_scheduling[block.id] = block
-        elif scheduling_mode == "spatial_arrangement":
-            self.queue_for_spatial_arrangement = block
+        if agent == "agent1":
+            self.queue_for_agent1[block.id] = block
+        elif agent == "agent2":
+            self.queue_for_agent2 = block
+        elif agent == "agent3":
+            self.queue_for_agent3 = block
+        else:
+            print("Invalid agent")
 
     def remove_from_queue(self,
                           block_id=None,
-                          scheduling_mode='machine_scheduling'):
+                          agent='agent1'):
 
-        if scheduling_mode == "machine_scheduling":
+        if agent == "agent1":
             assert block_id is not None
 
-            block = self.queue_for_machine_scheduling[block_id]
-            del self.queue_for_machine_scheduling[block_id]
+            block = self.queue_for_agent1[block_id]
+            del self.queue_for_agent1[block_id]
+            self.call_agent1 = False
 
-            self.machine_scheduling = False
+            self.queue_for_agent2 = block
+            self.call_agent2 = True
 
-        elif scheduling_mode == "spatial_arrangement":
-            block = self.queue_for_spatial_arrangement
-            self.queue_for_spatial_arrangement = None
+        elif agent == "agent2":
+            block = self.queue_for_agent2
+            self.queue_for_agent2 = None
+            self.call_agent2 = False
 
-            self.spatial_arrangement = False
+        elif agent == "agent3":
+            block = self.queue_for_agent3
+            self.queue_for_agent3 = None
+            self.call_agent3= False
 
         else:
             print("Invalid scheduling mode")
