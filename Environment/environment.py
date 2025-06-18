@@ -1,6 +1,5 @@
 import torch
 import simpy
-import copy
 import numpy as np
 import pandas as pd
 
@@ -65,6 +64,8 @@ class Factory:
         self.num_blocks = len(self.df_blocks)
         self.num_bays = len(self.df_bays)
 
+        self.eligibility_matrix = self._get_eligibility_matrix()
+
         if agent1 == "RL":
             self.agent1_block_feature_dim = 8
             self.agent1_bay_feature_dim = 8
@@ -106,20 +107,20 @@ class Factory:
             }
 
     def step(self, action):
-        if self.agent_mode == "Agent1":
+        if self.agent_mode == "agent1":
             block_id = action
-            block = self.monitor.remove_from_queue(block_id, agent="Agent1")
+            block = self.monitor.remove_from_queue(block_id, agent="agent1")
 
             if self.monitor.use_recording:
                 self.monitor.record(self.sim_env.now,
                                     block=block.name,
                                     event="Block_Selected")
 
-            self.agent_mode = "Agent2"
+            self.agent_mode = "agent2"
 
-        elif self.agent_mode == "Agent2":
+        elif self.agent_mode == "agent2":
             bay_id = action
-            block = self.monitor.remove_from_queue(agent="Agent2")
+            block = self.monitor.remove_from_queue(agent="agent2")
             bay = self.bays[bay_id]
 
             self.source.call_for_machine_scheduling[block.id].succeed(bay.id)
@@ -135,11 +136,11 @@ class Factory:
         else:
             # 공간 배치 알고리즘 추후 연결
 
+            self.agent_mode = "agent1"
+
             mask = self._get_mask()
             if mask.any():
                 self.monitor.set_scheduling_flag(scheduling_mode="machine_scheduling")
-
-            self.agent_mode = "Agent1"
 
         done = False
 
@@ -148,7 +149,7 @@ class Factory:
                 while self.sim_env.now in [event[0] for event in self.sim_env._queue]:
                     self.sim_env.step()
 
-                if self.agent_mode == "Agent1":
+                if self.agent_mode == "agent1":
                     mask = self._get_mask()
 
                     if mask.any():
@@ -180,7 +181,7 @@ class Factory:
          self.sink,
          self.monitor) = self._build_model()
 
-        self.agent_mode = "Agent1"
+        self.agent_mode = "agent1"
         self.current_date = 0
 
         while True:
@@ -197,20 +198,41 @@ class Factory:
 
         return local_observation
 
+    def _get_eligibility_matrix(self):
+        eligibility_matrix = np.zeros((self.num_blocks, self.num_bays), dtype=bool)
+
+        for _, block_info in self.df_blocks.iterrows():
+            for _, bay_info in self.df_bays.iterrows():
+                flag_size_constraint = (int(block_info["Breadth"]) <= int(bay_info["Block_Breadth"])
+                                        and int(block_info["Height"]) <= int(bay_info["Block_Height"]))
+
+                if block_info["Process_Type"] == "Final조립":
+                    flag_weight_constraint = (int(block_info["Weight"]) <= int(bay_info["Block_T/O_Weight"]))
+                else:
+                    flag_weight_constraint = (int(block_info["Weight"]) <= int(bay_info["Block_Weight"]))
+
+                flag_capacity_constraint = ((int(block_info["Workload_H01"]) <= int(bay_info["Capacity_H01"])
+                                            and (int(block_info["Workload_H02"]) <= int(bay_info["Capacity_H02"]))))
+
+                eligibility_matrix[int(block_info["Block_ID"]),int(bay_info["Bay_ID"])] \
+                    = flag_size_constraint & flag_weight_constraint & flag_capacity_constraint
+
+        return eligibility_matrix
+
     def _get_mask(self):
         num_rows = self.num_bays
         num_columns = self.num_blocks
 
         mask = np.zeros((num_rows, num_columns), dtype=bool)
 
-        if self.agent_mode == "Agent1":
+        if self.agent_mode == "agent1":
             blocks = [block for block in self.monitor.queue_for_agent1.values()]
             axis = 0
-        elif self.agent_mode == "Agent2":
+        elif self.agent_mode == "agent2":
             blocks = [self.monitor.queue_for_agent2]
             axis = 1
         else:
-            raise Exception("Invalid agent_mode")
+            raise Exception("Invalid agent mode")
 
         for block in blocks:
             process_type = block.process_type
@@ -238,9 +260,45 @@ class Factory:
         return mask
 
     def _get_local_observation(self):
-        if self.agent_mode == "Agent1":
+        if self.agent_mode == "agent1":
             if self.agent1 == "RL":
-                pass
+                # 노드 특성 벡터 생성
+                block_feature = np.zeros((self.num_blocks, self.agent1_block_feature_dim))
+                bay_feature = np.zeros((self.num_bays, self.agent1_bay_feature_dim))
+
+                # 그래프 내 노드 간 엣지 모델링
+                edge_block_to_block = [[], []]
+                edge_block_to_bay, edge_bay_to_block = [[], []], [[], []]
+
+                # block 노드와 bay 노드 간 엣지 구성
+                for _, block_info in self.df_blocks.iterrows():
+                    for _, bay_info in self.df_bays.iterrows():
+                        if self.eligibility_matrix[int(block_info["Block_ID"]),int(bay_info["Bay_ID"])]:
+                            edge_block_to_bay[0].append(int(block_info["Block_ID"]))
+                            edge_block_to_bay[1].append(int(bay_info["Bay_ID"]))
+                            edge_bay_to_block[0].append(int(bay_info["Bay_ID"]))
+                            edge_bay_to_block[1].append(int(block_info["Block_ID"]))
+
+                # block 노드 간 엣지 구성
+                for block_from in self.monitor.queue_for_agent1.values():
+                    for block_to in self.monitor.queue_for_agent1.values():
+                        edge_block_to_block[0].append(block_from.id)
+                        edge_block_to_block[1].append(block_to.id)
+
+                # 이종 그래프 객체 생성
+                block_feature = torch.from_numpy(block_feature).type(torch.float32).to(self.device)
+                bay_feature = torch.from_numpy(bay_feature).type(torch.float32).to(self.device)
+                edge_block_to_block = torch.from_numpy(np.array(edge_block_to_block)).type(torch.long).to(self.device)
+                edge_block_to_bay = torch.from_numpy(np.array(edge_block_to_bay)).type(torch.long).to(self.device)
+                edge_bay_to_block = torch.from_numpy(np.array(edge_bay_to_block)).type(torch.long).to(self.device)
+
+                graph_feature = HeteroData()
+                graph_feature["block"].x = block_feature
+                graph_feature["bay"].x = bay_feature
+                graph_feature["block", "block_to_block", "block"].edge_index = edge_block_to_block
+                graph_feature["block", "block_to_bay", "bay"].edge_index = edge_block_to_bay
+                graph_feature["bay", "bay_to_block", "block"].edge_index = edge_bay_to_block
+
             else:
                 priority_idx = np.zeros(self.num_blocks)
 
@@ -266,9 +324,45 @@ class Factory:
                     for block in self.monitor.queue_for_agent1.values():
                         priority_idx[block.id] = 1
 
-        elif self.agent_mode == "Agent2":
+        elif self.agent_mode == "agent2":
             if self.agent2 == "RL":
-                pass
+                # 노드 특성 벡터 생성
+                block_feature = np.zeros((self.num_blocks, self.agent2_block_feature_dim))
+                bay_feature = np.zeros((self.num_bays, self.agent2_bay_feature_dim))
+
+                # 그래프 내 노드 간 엣지 모델링
+                edge_bay_to_bay = [[], []]
+                edge_block_to_bay, edge_bay_to_block = [[], []], [[], []]
+
+                # block 노드와 bay 노드 간 엣지 구성
+                for _, block_info in self.df_blocks.iterrows():
+                    for _, bay_info in self.df_bays.iterrows():
+                        if self.eligibility_matrix[int(block_info["Block_ID"]), int(bay_info["Bay_ID"])]:
+                            edge_block_to_bay[0].append(int(block_info["Block_ID"]))
+                            edge_block_to_bay[1].append(int(bay_info["Bay_ID"]))
+                            edge_bay_to_block[0].append(int(bay_info["Bay_ID"]))
+                            edge_bay_to_block[1].append(int(block_info["Block_ID"]))
+
+                # bay 노드 간 엣지 구성
+                for bay_from in self.bays.values():
+                    for bay_to in self.bays.values():
+                        edge_bay_to_bay[0].append(bay_from.id)
+                        edge_bay_to_bay[1].append(bay_to.id)
+
+                # 이종 그래프 객체 생성
+                block_feature = torch.from_numpy(block_feature).type(torch.float32).to(self.device)
+                bay_feature = torch.from_numpy(bay_feature).type(torch.float32).to(self.device)
+                edge_bay_to_bay = torch.from_numpy(np.array(edge_bay_to_bay)).type(torch.long).to(self.device)
+                edge_block_to_bay = torch.from_numpy(np.array(edge_block_to_bay)).type(torch.long).to(self.device)
+                edge_bay_to_block = torch.from_numpy(np.array(edge_bay_to_block)).type(torch.long).to(self.device)
+
+                graph_feature = HeteroData()
+                graph_feature["block"].x = block_feature
+                graph_feature["bay"].x = bay_feature
+                graph_feature["bay", "bay_to_bay", "bay"].edge_index = edge_bay_to_bay
+                graph_feature["block", "block_to_bay", "bay"].edge_index = edge_block_to_bay
+                graph_feature["bay", "bay_to_block", "block"].edge_index = edge_bay_to_block
+
             else:
                 priority_idx = np.zeros(self.num_bays)
 
@@ -306,16 +400,30 @@ class Factory:
         else:
             raise Exception("Invalid agent_mode")
 
-        state = State()
-        mask = self._get_mask()
+        if self.agent_mode == "agent1":
+            state = State(self.agent1)
+            mask = self._get_mask()
 
-        if (self.agent_mode == "Agent1" and self.agent1 == "RL") \
-            or (self.agent_mode == "Agent2" and self.agent2 == "RL"):
-            state.update(graph_feature=graph_feature,
-                         mask=mask)
+            if self.agent1 == "RL":
+                state.update(graph_feature=graph_feature,
+                             mask=mask)
+            else:
+                state.update(priority_idx=priority_idx,
+                             mask=mask)
+
+        elif self.agent_mode == "agent2":
+            state = State(self.agent2)
+            mask = self._get_mask()
+
+            if self.agent2 == "RL":
+                state.update(graph_feature=graph_feature,
+                             mask=mask)
+            else:
+                state.update(priority_idx=priority_idx,
+                             mask=mask)
+
         else:
-            state.update(priority_idx=priority_idx,
-                         mask=mask)
+            state = None
 
         return state
 
@@ -406,33 +514,42 @@ if __name__ == '__main__':
     state_agent1 = env.reset()
 
     while True:
-        if env.agent_mode == "Agent1":
-            mode = "Agent1"
-        elif env.agent_mode == "Agent2":
-            mode = "Agent2"
+        if env.agent_mode == "agent1":
+            mode = "agent1"
+        elif env.agent_mode == "agent2":
+            mode = "agent2"
         elif env.agent_mode == "agent3":
             mode = "agent3"
         else:
-            raise Exception("Invalid Agent mode")
+            raise Exception("Invalid agent mode")
 
-        if mode == "Agent1":
+        if mode == "agent1":
             action_agent1 = agent1.act(state_agent1)
             next_state_agent2, reward_agent1, done = env.step(action_agent1)
-            episode_reward += reward_agent1
-            # mask = state.mask.transpose(0, 1).flatten()
-            # candidates = np.where(mask == True)[0]
-            # action = np.random.choice(candidates)
-        elif mode == "Agent2":
-            action_agent2 = agent2.act(state_agent2)
-            next_state_agent1, reward_agent2, done = env.step(action_agent2)
-            episode_reward += reward_agent2
-            # mask = state.mask
-            # candidates = np.where(mask == True)[0]
-            # action = np.random.choice(candidates)
+            # episode_reward += reward_agent1
 
-        if mode == "Agent1":
+            # mask = state_agent1.mask
+            # candidates = np.where(mask == True)[0]
+            # action_agent1 = np.random.choice(candidates)
+            # next_state_agent2, reward_agent1, done = env.step(action_agent1)
+        elif mode == "agent2":
+            action_agent2 = agent2.act(state_agent2)
+            next_state_agent3, reward_agent2, done = env.step(action_agent2)
+            # episode_reward += reward_agent2
+
+            # mask = state_agent2.mask
+            # candidates = np.where(mask == True)[0]
+            # action_agent2 = np.random.choice(candidates)
+            # next_state_agent3, reward_agent2, done = env.step(action_agent2)
+        else:
+            action_agent3 = None
+            next_state_agent1, reward_agent3, done = env.step(action_agent3)
+
+        if mode == "agent1":
             state_agent2 = next_state_agent2
-        elif mode == "Agent2":
+        elif mode == "agent2":
+            state_agent3 = next_state_agent3
+        else:
             state_agent1 = next_state_agent1
 
         step += 1

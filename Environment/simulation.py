@@ -147,7 +147,7 @@ class Bay:
             self.monitor.record(self.env.now,
                                 block=block.name,
                                 bay=self.name,
-                                team=self.team.name,
+                                team=self.team,
                                 event="Working_Started")
 
         yield self.env.timeout(block.duration)
@@ -156,10 +156,15 @@ class Bay:
             self.monitor.record(self.env.now,
                                 block=block.name,
                                 bay=self.name,
-                                team=self.team.name,
+                                team=self.team,
                                 event="Working_Finished")
 
+        self.monitor.set_scheduling_flag(scheduling_mode="machine_scheduling")
+
         del self.monitor.blocks_working[block.id]
+        del self.processes[block.id]
+        del self.blocks_in_bay[block.id]
+
         self.occupied_space -= block.length * block.breadth
         self.workload_h1 -= block.workload_h1
         self.workload_h2 -= block.workload_h2
@@ -200,6 +205,10 @@ class Monitor:
         self.call_agent1 = False
         self.call_agent2 = False
         self.call_agent3 = False
+
+        self.blocks_unscheduled = {}
+        self.blocks_working = {}
+        self.blocks_done = {}
 
         self.time = []
         self.block = []
