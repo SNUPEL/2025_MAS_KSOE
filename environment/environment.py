@@ -53,11 +53,10 @@ class Factory:
         self.use_communication = use_communication
 
         if type(data_src) is DataGenerator:
-            self.df_blocks, self.df_bays, self.df_teams = data_src.generate()
+            self.df_blocks, self.df_bays = data_src.generate()
         else:
             self.df_blocks = pd.read_excel(data_src, sheet_name="blocks", engine='openpyxl')
             self.df_bays = pd.read_excel(data_src, sheet_name="bays", engine='openpyxl')
-            self.df_teams = pd.read_excel(data_src, sheet_name="teams", engine='openpyxl')
 
         self.num_blocks = len(self.df_blocks)
         self.num_bays = len(self.df_bays)
@@ -101,8 +100,6 @@ class Factory:
                 "block": self.num_blocks,
                 "bay": self.num_bays
             }
-
-        self.mask = None
 
     def step(self, action):
         if self.agent_mode == "agent1":
@@ -202,7 +199,16 @@ class Factory:
 
         mask = np.zeros((num_rows, num_columns), dtype=bool)
 
-        for block in self.monitor.queue_for_agent1.values():
+        if self.agent_mode == "agent1":
+            blocks = [block for block in self.monitor.queue_for_agent1.values()]
+            axis = 0
+        elif self.agent_mode == "agent2":
+            blocks = [self.monitor.queue_for_agent2]
+            axis = 1
+        else:
+            raise Exception("Invalid agent_mode")
+
+        for block in blocks:
             process_type = block.process_type
             weight = block.weight
             breadth = block.breadth
@@ -217,7 +223,7 @@ class Factory:
 
                 mask[bay.id, block.id] = flag_size_availability & flag_weight_availability
 
-        mask = torch.tensor(mask, dtype=torch.bool).to(self.device)
+        mask = torch.tensor(np.any(mask, axis=axis), dtype=torch.bool).to(self.device)
 
         return mask
 
@@ -268,8 +274,8 @@ class Factory:
                 # lowest capacity remaining (LCR)
                 elif self.agent2 == "LCR":
                     for bay in self.bays.values():
-                        capacity_ratio_h1 = bay.workload_h1 / bay.team.capacity_h1 * 100
-                        capacity_ratio_h2 = bay.workload_h2 / bay.team.capacity_h2 * 100
+                        capacity_ratio_h1 = bay.workload_h1 / bay.capacity_h1 * 100
+                        capacity_ratio_h2 = bay.workload_h2 / bay.capacity_h2 * 100
                         capacity_ratio_avg = (capacity_ratio_h1 + capacity_ratio_h2) / 2
                         priority_idx[bay.id] = 1 / capacity_ratio_avg if capacity_ratio_avg > 0 else 1
                 # randon (RAND)
@@ -290,29 +296,16 @@ class Factory:
         else:
             raise Exception("Invalid agent_mode")
 
-        if self.agent_mode == "agent1":
-            state = State()
-            self.mask = self._get_mask()
+        state = State()
+        mask = self._get_mask()
 
-            if self.agent1 == "RL":
-                state.update(graph_feature=graph_feature,
-                             mask=self.mask)
-            else:
-                state.update(priority_idx=priority_idx,
-                             mask=self.mask)
-
-        elif self.agent_mode == "agent2":
-            state = State()
-
-            if self.agent2 == "RL":
-                state.update(graph_feature=graph_feature,
-                             mask=self.mask)
-            else:
-                state.update(priority_idx=priority_idx,
-                             mask=self.mask)
-
-        elif self.agent_mode == "agent3":
-            pass
+        if (self.agent_mode == "agent1" and self.agent1 == "RL") \
+            or (self.agent_mode == "agent2" and self.agent2 == "RL"):
+            state.update(graph_feature=graph_feature,
+                         mask=mask)
+        else:
+            state.update(priority_idx=priority_idx,
+                         mask=mask)
 
         return state
 
@@ -355,17 +348,12 @@ class Factory:
                     monitor=monitor)
 
         for _, row in self.df_bays.iterrows():
-            df_temp = self.df_teams[self.df_teams['Name'] == row['Team_Name']]
-            team = Team(name=df_temp['Team_Name'],
-                        num_workers_h1=int(df_temp['Num_Workers_H01']),
-                        num_workers_h2=int(df_temp['Num_Workers_H01']),
-                        capacity_h1=float(df_temp['Capacity_H01']),
-                        capacity_h2=float(df_temp['Capacity_H02']))
-
             bay = Bay(sim_env,
                       name=row['Bay_Name'],
                       id=int(row['Bay_ID']),
-                      team=team,
+                      team=row['Team_Name'],
+                      capacity_h1=float(row['Capacity_H01']),
+                      capacity_h2=float(row['Capacity_H02']),
                       length=float(row['Bay_Length']),
                       breadth=float(row['Bay_Breadth']),
                       block_breadth=float(row['Block_Breadth']),
