@@ -5,8 +5,8 @@ import numpy as np
 import pandas as pd
 
 from torch_geometric.data import HeteroData
-# from environment.data import DataGenerator
-from environment.simulation import *
+from Environment.data import DataGenerator
+from Environment.simulation import *
 
 
 class State:
@@ -36,7 +36,9 @@ class State:
 
 
 class Factory:
-    def __init__(self, data_src,
+    def __init__(self,
+                 block_data_src,
+                 bay_data_src,
                  device='cpu',
                  agent1='RL',
                  agent2='RL',
@@ -44,7 +46,8 @@ class Factory:
                  use_recording=False,
                  use_communication=True):
 
-        self.data_src = data_src
+        self.block_data_src = block_data_src
+        self.bay_data_src = bay_data_src
         self.device = device
         self.agent1 = agent1
         self.agent2 = agent2
@@ -52,11 +55,12 @@ class Factory:
         self.use_recording = use_recording
         self.use_communication = use_communication
 
-        if type(data_src) is DataGenerator:
-            self.df_blocks, self.df_bays = data_src.generate()
+        if type(block_data_src) is DataGenerator:
+            self.df_blocks = block_data_src.generate()
+            self.df_bays = pd.read_excel(bay_data_src, sheet_name="bays", engine='openpyxl')
         else:
-            self.df_blocks = pd.read_excel(data_src, sheet_name="blocks", engine='openpyxl')
-            self.df_bays = pd.read_excel(data_src, sheet_name="bays", engine='openpyxl')
+            self.df_blocks = pd.read_excel(block_data_src, sheet_name="blocks", engine='openpyxl')
+            self.df_bays = pd.read_excel(bay_data_src, sheet_name="bays", engine='openpyxl')
 
         self.num_blocks = len(self.df_blocks)
         self.num_bays = len(self.df_bays)
@@ -328,15 +332,15 @@ class Factory:
                           id=int(row['Block_ID']),
                           process_type=row['Process_Type'],
                           ship_type=row['Ship_Type'],
-                          start_date=int(row['Start Date']),
+                          start_date=int(row['Start_Date']),
                           duration=int(row['Duration']),
-                          due_date=None,
-                          weight=float(row['W']),
-                          length=float(row['L']),
-                          breadth=float(row['B']),
-                          height=float(row['H']),
-                          workload_h1=int(row['H01']),
-                          workload_h2=int(row['H02']))
+                          due_date=float(row['Due_Date']),
+                          weight=float(row['Weight']),
+                          length=float(row['Length']),
+                          breadth=float(row['Breadth']),
+                          height=float(row['Height']),
+                          workload_h1=int(row['Workload_H01']),
+                          workload_h2=int(row['Workload_H02']))
 
             blocks.append(block)
 
@@ -387,8 +391,10 @@ if __name__ == '__main__':
     agent2 = BAHeuristic(algorithm_agent2)
 
     # data_src = DataGenerator()
-    data_src = "../input/sample data.xlsx"
-    env = Factory(data_src,
+    block_data_src = "../input/block_data.xlsx"
+    bay_data_src = "../input/bay_config.xlsx"
+    env = Factory(block_data_src,
+                  bay_data_src,
                   agent1=algorithm_agent1,
                   agent2=algorithm_agent2,
                   agent3=algorithm_agent3,
