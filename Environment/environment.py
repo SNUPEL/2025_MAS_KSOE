@@ -64,6 +64,8 @@ class Factory:
         self.num_blocks = len(self.df_blocks)
         self.num_bays = len(self.df_bays)
 
+        self.eligibility_matrix = self._get_eligibility_matrix()
+
         if agent1 == "RL":
             self.agent1_block_feature_dim = 8
             self.agent1_bay_feature_dim = 8
@@ -196,6 +198,27 @@ class Factory:
 
         return local_observation
 
+    def _get_eligibility_matrix(self):
+        eligibility_matrix = np.zeros((self.num_blocks, self.num_bays), dtype=bool)
+
+        for _, block_info in self.df_blocks.iterrows():
+            for _, bay_info in self.df_bays.iterrows():
+                flag_size_constraint = (int(block_info["Breadth"]) <= int(bay_info["Block_Breadth"])
+                                        and int(block_info["Height"]) <= int(bay_info["Block_Height"]))
+
+                if block_info["Process_Type"] == "Final조립":
+                    flag_weight_constraint = (int(block_info["Weight"]) <= int(bay_info["Block_T/O_Weight"]))
+                else:
+                    flag_weight_constraint = (int(block_info["Weight"]) <= int(bay_info["Block_Weight"]))
+
+                flag_capacity_constraint = ((int(block_info["Workload_H01"]) <= int(bay_info["Capacity_H01"])
+                                            and (int(block_info["Workload_H02"]) <= int(bay_info["Capacity_H02"]))))
+
+                eligibility_matrix[int(block_info["Block_ID"]),int(bay_info["Bay_ID"])] \
+                    = flag_size_constraint & flag_weight_constraint & flag_capacity_constraint
+
+        return eligibility_matrix
+
     def _get_mask(self):
         num_rows = self.num_bays
         num_columns = self.num_blocks
@@ -239,7 +262,43 @@ class Factory:
     def _get_local_observation(self):
         if self.agent_mode == "agent1":
             if self.agent1 == "RL":
-                pass
+                # 노드 특성 벡터 생성
+                block_feature = np.zeros((self.num_blocks, self.agent1_block_feature_dim))
+                bay_feature = np.zeros((self.num_bays, self.agent1_bay_feature_dim))
+
+                # 그래프 내 노드 간 엣지 모델링
+                edge_block_to_block = [[], []]
+                edge_block_to_bay, edge_bay_to_block = [[], []], [[], []]
+
+                # block 노드와 bay 노드 간 엣지 구성
+                for _, block_info in self.df_blocks.iterrows():
+                    for _, bay_info in self.df_bays.iterrows():
+                        if self.eligibility_matrix[int(block_info["Block_ID"]),int(bay_info["Bay_ID"])]:
+                            edge_block_to_bay[0].append(int(block_info["Block_ID"]))
+                            edge_block_to_bay[1].append(int(bay_info["Bay_ID"]))
+                            edge_bay_to_block[0].append(int(bay_info["Bay_ID"]))
+                            edge_bay_to_block[1].append(int(block_info["Block_ID"]))
+
+                # block 노드 간 엣지 구성
+                for block_from in self.monitor.queue_for_agent1.values():
+                    for block_to in self.monitor.queue_for_agent1.values():
+                        edge_block_to_block[0].append(block_from.id)
+                        edge_block_to_block[1].append(block_to.id)
+
+                # 이종 그래프 객체 생성
+                block_feature = torch.from_numpy(block_feature).type(torch.float32).to(self.device)
+                bay_feature = torch.from_numpy(bay_feature).type(torch.float32).to(self.device)
+                edge_block_to_block = torch.from_numpy(np.array(edge_block_to_block)).type(torch.long).to(self.device)
+                edge_block_to_bay = torch.from_numpy(np.array(edge_block_to_bay)).type(torch.long).to(self.device)
+                edge_bay_to_block = torch.from_numpy(np.array(edge_bay_to_block)).type(torch.long).to(self.device)
+
+                graph_feature = HeteroData()
+                graph_feature["block"].x = block_feature
+                graph_feature["bay"].x = bay_feature
+                graph_feature["block", "block_to_block", "block"].edge_index = edge_block_to_block
+                graph_feature["block", "block_to_bay", "bay"].edge_index = edge_block_to_bay
+                graph_feature["bay", "bay_to_block", "block"].edge_index = edge_bay_to_block
+
             else:
                 priority_idx = np.zeros(self.num_blocks)
 
@@ -267,7 +326,43 @@ class Factory:
 
         elif self.agent_mode == "agent2":
             if self.agent2 == "RL":
-                pass
+                # 노드 특성 벡터 생성
+                block_feature = np.zeros((self.num_blocks, self.agent2_block_feature_dim))
+                bay_feature = np.zeros((self.num_bays, self.agent2_bay_feature_dim))
+
+                # 그래프 내 노드 간 엣지 모델링
+                edge_bay_to_bay = [[], []]
+                edge_block_to_bay, edge_bay_to_block = [[], []], [[], []]
+
+                # block 노드와 bay 노드 간 엣지 구성
+                for _, block_info in self.df_blocks.iterrows():
+                    for _, bay_info in self.df_bays.iterrows():
+                        if self.eligibility_matrix[int(block_info["Block_ID"]), int(bay_info["Bay_ID"])]:
+                            edge_block_to_bay[0].append(int(block_info["Block_ID"]))
+                            edge_block_to_bay[1].append(int(bay_info["Bay_ID"]))
+                            edge_bay_to_block[0].append(int(bay_info["Bay_ID"]))
+                            edge_bay_to_block[1].append(int(block_info["Block_ID"]))
+
+                # bay 노드 간 엣지 구성
+                for bay_from in self.bays.values():
+                    for bay_to in self.bays.values():
+                        edge_bay_to_bay[0].append(bay_from.id)
+                        edge_bay_to_bay[1].append(bay_to.id)
+
+                # 이종 그래프 객체 생성
+                block_feature = torch.from_numpy(block_feature).type(torch.float32).to(self.device)
+                bay_feature = torch.from_numpy(bay_feature).type(torch.float32).to(self.device)
+                edge_bay_to_bay = torch.from_numpy(np.array(edge_bay_to_bay)).type(torch.long).to(self.device)
+                edge_block_to_bay = torch.from_numpy(np.array(edge_block_to_bay)).type(torch.long).to(self.device)
+                edge_bay_to_block = torch.from_numpy(np.array(edge_bay_to_block)).type(torch.long).to(self.device)
+
+                graph_feature = HeteroData()
+                graph_feature["block"].x = block_feature
+                graph_feature["bay"].x = bay_feature
+                graph_feature["bay", "bay_to_bay", "bay"].edge_index = edge_bay_to_bay
+                graph_feature["block", "block_to_bay", "bay"].edge_index = edge_block_to_bay
+                graph_feature["bay", "bay_to_block", "block"].edge_index = edge_bay_to_block
+
             else:
                 priority_idx = np.zeros(self.num_bays)
 
@@ -432,16 +527,20 @@ if __name__ == '__main__':
             action_agent1 = agent1.act(state_agent1)
             next_state_agent2, reward_agent1, done = env.step(action_agent1)
             # episode_reward += reward_agent1
-            # mask = state.mask.transpose(0, 1).flatten()
+
+            # mask = state_agent1.mask
             # candidates = np.where(mask == True)[0]
-            # action = np.random.choice(candidates)
+            # action_agent1 = np.random.choice(candidates)
+            # next_state_agent2, reward_agent1, done = env.step(action_agent1)
         elif mode == "agent2":
             action_agent2 = agent2.act(state_agent2)
             next_state_agent3, reward_agent2, done = env.step(action_agent2)
             # episode_reward += reward_agent2
-            # mask = state.mask
+
+            # mask = state_agent2.mask
             # candidates = np.where(mask == True)[0]
-            # action = np.random.choice(candidates)
+            # action_agent2 = np.random.choice(candidates)
+            # next_state_agent3, reward_agent2, done = env.step(action_agent2)
         else:
             action_agent3 = None
             next_state_agent1, reward_agent3, done = env.step(action_agent3)
