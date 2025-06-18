@@ -213,15 +213,21 @@ class Factory:
             weight = block.weight
             breadth = block.breadth
             height = block.height
+            workload_h1 = block.workload_h1
+            workload_h2 = block.workload_h2
 
             for bay in self.bays.values():
-                flag_size_availability = (breadth <= bay.block_breadth) and (height <= bay.block_height)
-                if process_type == "Final조립":
-                    flag_weight_availability = (weight <= bay.block_turnover_weight)
-                else:
-                    flag_weight_availability = (weight <= bay.block_weight)
+                flag_size_constraint = (breadth <= bay.block_breadth) and (height <= bay.block_height)
 
-                mask[bay.id, block.id] = flag_size_availability & flag_weight_availability
+                if process_type == "Final조립":
+                    flag_weight_constraint = (weight <= bay.block_turnover_weight)
+                else:
+                    flag_weight_constraint = (weight <= bay.block_weight)
+
+                flag_capacity_constraint = ((bay.workload_h1 + workload_h1 <= bay.capacity_h1)
+                                            and (bay.workload_h2 + workload_h2 <= bay.capacity_h2))
+
+                mask[bay.id, block.id] = flag_size_constraint & flag_weight_constraint & flag_capacity_constraint
 
         mask = torch.tensor(np.any(mask, axis=axis), dtype=torch.bool).to(self.device)
 
