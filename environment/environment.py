@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 
 from torch_geometric.data import HeteroData
-from environment.data import DataGenerator
+# from environment.data import DataGenerator
 from environment.simulation import *
 
 
@@ -53,11 +53,10 @@ class Factory:
         self.use_communication = use_communication
 
         if type(data_src) is DataGenerator:
-            self.df_blocks, self.df_bays, self.df_teams = data_src.generate()
+            self.df_blocks, self.df_bays = data_src.generate()
         else:
             self.df_blocks = pd.read_excel(data_src, sheet_name="blocks", engine='openpyxl')
             self.df_bays = pd.read_excel(data_src, sheet_name="bays", engine='openpyxl')
-            self.df_teams = pd.read_excel(data_src, sheet_name="teams", engine='openpyxl')
 
         self.num_blocks = len(self.df_blocks)
         self.num_bays = len(self.df_bays)
@@ -103,20 +102,20 @@ class Factory:
             }
 
     def step(self, action):
-        if self.agent_mode == "agent1":
+        if self.agent_mode == "Agent1":
             block_id = action
-            block = self.monitor.remove_from_queue(block_id, agent="agent1")
+            block = self.monitor.remove_from_queue(block_id, agent="Agent1")
 
             if self.monitor.use_recording:
                 self.monitor.record(self.sim_env.now,
                                     block=block.name,
                                     event="Block_Selected")
 
-            self.agent_mode = "agent2"
+            self.agent_mode = "Agent2"
 
-        elif self.agent_mode == "agent2":
+        elif self.agent_mode == "Agent2":
             bay_id = action
-            block = self.monitor.remove_from_queue(agent="agent2")
+            block = self.monitor.remove_from_queue(agent="Agent2")
             bay = self.bays[bay_id]
 
             self.source.call_for_machine_scheduling[block.id].succeed(bay.id)
@@ -136,7 +135,7 @@ class Factory:
             if mask.any():
                 self.monitor.set_scheduling_flag(scheduling_mode="machine_scheduling")
 
-            self.agent_mode = "agent1"
+            self.agent_mode = "Agent1"
 
         done = False
 
@@ -145,7 +144,7 @@ class Factory:
                 while self.sim_env.now in [event[0] for event in self.sim_env._queue]:
                     self.sim_env.step()
 
-                if self.agent_mode == "agent1":
+                if self.agent_mode == "Agent1":
                     mask = self._get_mask()
 
                     if mask.any():
@@ -177,7 +176,7 @@ class Factory:
          self.sink,
          self.monitor) = self._build_model()
 
-        self.agent_mode = "agent1"
+        self.agent_mode = "Agent1"
         self.current_date = 0
 
         while True:
@@ -195,10 +194,126 @@ class Factory:
         return local_observation
 
     def _get_mask(self):
-        pass
+        num_rows = self.num_bays
+        num_columns = self.num_blocks
+
+        mask = np.zeros((num_rows, num_columns), dtype=bool)
+
+        if self.agent_mode == "Agent1":
+            blocks = [block for block in self.monitor.queue_for_agent1.values()]
+            axis = 0
+        elif self.agent_mode == "Agent2":
+            blocks = [self.monitor.queue_for_agent2]
+            axis = 1
+        else:
+            raise Exception("Invalid agent_mode")
+
+        for block in blocks:
+            process_type = block.process_type
+            weight = block.weight
+            breadth = block.breadth
+            height = block.height
+            workload_h1 = block.workload_h1
+            workload_h2 = block.workload_h2
+
+            for bay in self.bays.values():
+                flag_size_constraint = (breadth <= bay.block_breadth) and (height <= bay.block_height)
+
+                if process_type == "Final조립":
+                    flag_weight_constraint = (weight <= bay.block_turnover_weight)
+                else:
+                    flag_weight_constraint = (weight <= bay.block_weight)
+
+                flag_capacity_constraint = ((bay.workload_h1 + workload_h1 <= bay.capacity_h1)
+                                            and (bay.workload_h2 + workload_h2 <= bay.capacity_h2))
+
+                mask[bay.id, block.id] = flag_size_constraint & flag_weight_constraint & flag_capacity_constraint
+
+        mask = torch.tensor(np.any(mask, axis=axis), dtype=torch.bool).to(self.device)
+
+        return mask
 
     def _get_local_observation(self):
-        pass
+        if self.agent_mode == "Agent1":
+            if self.agent1 == "RL":
+                pass
+            else:
+                priority_idx = np.zeros(self.num_blocks)
+
+                # shortest processing time (SPT)
+                if self.agent1 == "SPT":
+                    for block in self.monitor.queue_for_agent1.values():
+                        priority_idx[block.id] = 1 / block.duration
+                # earliest due date (EDD)
+                elif self.agent1 == "EDD":
+                    for block in self.monitor.queue_for_agent1.values():
+                        priority_idx[block.id] = 1 / block.due_date
+                # modified due date (MDD)
+                elif self.agent1 == "MDD":
+                    for block in self.monitor.queue_for_agent1.values():
+                        priority_idx[block.id] = 1 / max(block.due_date, self.current_date + block.duration)
+                # least slack time (LST)
+                elif self.agent1 == "LST":
+                    for block in self.monitor.queue_for_agent1.values():
+                        priority_idx[block.id] = 1 / (block.duration - self.current_date - block.duration) \
+                            if block.duration - self.current_date - block.duration > 0 else 1
+                # random (RAND)
+                else:
+                    for block in self.monitor.queue_for_agent1.values():
+                        priority_idx[block.id] = 1
+
+        elif self.agent_mode == "Agent2":
+            if self.agent2 == "RL":
+                pass
+            else:
+                priority_idx = np.zeros(self.num_bays)
+
+                # minimum number of blocks (MNB)
+                if self.agent2 == "MNB":
+                    for bay in self.bays.values():
+                        priority_idx[bay.id] = 1 / len(bay.blocks_in_bay) if len(bay.blocks_in_bay) > 0 else 1
+                # largest space remaining (LSR)
+                elif self.agent2 == "LSR":
+                    for bay in self.bays.values():
+                        occupied_space_ratio = bay.occupied_space / (bay.length * bay.breadth) * 100
+                        priority_idx[bay.id] = 1 / occupied_space_ratio if occupied_space_ratio > 0 else 1
+                # lowest capacity remaining (LCR)
+                elif self.agent2 == "LCR":
+                    for bay in self.bays.values():
+                        capacity_ratio_h1 = bay.workload_h1 / bay.capacity_h1 * 100
+                        capacity_ratio_h2 = bay.workload_h2 / bay.capacity_h2 * 100
+                        capacity_ratio_avg = (capacity_ratio_h1 + capacity_ratio_h2) / 2
+                        priority_idx[bay.id] = 1 / capacity_ratio_avg if capacity_ratio_avg > 0 else 1
+                # randon (RAND)
+                else:
+                    for bay in self.bays.values():
+                        priority_idx[bay.id] = 1
+
+        elif self.agent_mode == "agent3":
+            # no-fit polygon (NFP)
+            if self.agent3 == "NFP":
+                pass
+            # bottom left fill (BLF)
+            elif self.agent3 == "BLF":
+                pass
+            # random (RAND)
+            else:
+                pass
+        else:
+            raise Exception("Invalid agent_mode")
+
+        state = State()
+        mask = self._get_mask()
+
+        if (self.agent_mode == "Agent1" and self.agent1 == "RL") \
+            or (self.agent_mode == "Agent2" and self.agent2 == "RL"):
+            state.update(graph_feature=graph_feature,
+                         mask=mask)
+        else:
+            state.update(priority_idx=priority_idx,
+                         mask=mask)
+
+        return state
 
     def _calculate_reward(self):
         pass
@@ -239,17 +354,12 @@ class Factory:
                     monitor=monitor)
 
         for _, row in self.df_bays.iterrows():
-            df_temp = self.df_teams[self.df_teams['Name'] == row['Team_Name']]
-            team = Team(name=df_temp['Team_Name'],
-                        num_workers_h1=int(df_temp['Num_Workers_H01']),
-                        num_workers_h2=int(df_temp['Num_Workers_H01']),
-                        capacity_h1=float(df_temp['Capacity_H01']),
-                        capacity_h2=float(df_temp['Capacity_H02']))
-
             bay = Bay(sim_env,
                       name=row['Bay_Name'],
                       id=int(row['Bay_ID']),
-                      team=team,
+                      team=row['Team_Name'],
+                      capacity_h1=float(row['Capacity_H01']),
+                      capacity_h2=float(row['Capacity_H02']),
                       length=float(row['Bay_Length']),
                       breadth=float(row['Bay_Breadth']),
                       block_breadth=float(row['Block_Breadth']),
@@ -262,3 +372,66 @@ class Factory:
             bays[bay.id] = bay
 
         return sim_env, blocks, source, bays, sink, monitor
+
+
+if __name__ == '__main__':
+    import random
+    from Agent.Agent1.heuristic import BSHeuristic
+    from Agent.Agent2.heuristic import BAHeuristic
+
+    algorithm_agent1 = "SPT"
+    algorithm_agent2 = "MNB"
+    algorithm_agent3 = "BLF"
+
+    agent1 = BSHeuristic(algorithm_agent1)
+    agent2 = BAHeuristic(algorithm_agent2)
+
+    # data_src = DataGenerator()
+    data_src = "../input/sample data.xlsx"
+    env = Factory(data_src,
+                  agent1=algorithm_agent1,
+                  agent2=algorithm_agent2,
+                  agent3=algorithm_agent3,
+                  use_recording=True)
+
+    step = 0
+    episode_reward = 0
+    random.seed(42)
+    state_agent1 = env.reset()
+
+    while True:
+        if env.agent_mode == "Agent1":
+            mode = "Agent1"
+        elif env.agent_mode == "Agent2":
+            mode = "Agent2"
+        elif env.agent_mode == "agent3":
+            mode = "agent3"
+        else:
+            raise Exception("Invalid Agent mode")
+
+        if mode == "Agent1":
+            action_agent1 = agent1.act(state_agent1)
+            next_state_agent2, reward_agent1, done = env.step(action_agent1)
+            episode_reward += reward_agent1
+            # mask = state.mask.transpose(0, 1).flatten()
+            # candidates = np.where(mask == True)[0]
+            # action = np.random.choice(candidates)
+        elif mode == "Agent2":
+            action_agent2 = agent2.act(state_agent2)
+            next_state_agent1, reward_agent2, done = env.step(action_agent2)
+            episode_reward += reward_agent2
+            # mask = state.mask
+            # candidates = np.where(mask == True)[0]
+            # action = np.random.choice(candidates)
+
+        if mode == "Agent1":
+            state_agent2 = next_state_agent2
+        elif mode == "Agent2":
+            state_agent1 = next_state_agent1
+
+        step += 1
+
+        print(step, episode_reward)
+
+        if done:
+            break

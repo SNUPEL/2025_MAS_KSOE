@@ -34,21 +34,6 @@ class Block:
         self.allocated_bay = None
 
 
-class Team:
-    def __init__(self,
-                 name=None,
-                 num_workers_h1=None,
-                 num_workers_h2=None,
-                 capacity_h1=None,
-                 capacity_h2=None):
-
-        self.name = name
-        self.num_workers_h1 = num_workers_h1
-        self.num_workers_h2 = num_workers_h2
-        self.capacity_h1 = capacity_h1
-        self.capacity_h2 = capacity_h2
-
-
 class Source:
     def __init__(self,
                  env,
@@ -104,6 +89,8 @@ class Bay:
                  name=None,
                  id=None,
                  team=None,
+                 capacity_h1=None,
+                 capacity_h2=None,
                  length=None,
                  breadth=None,
                  block_breadth=None,
@@ -117,6 +104,8 @@ class Bay:
         self.name = name
         self.id = id
         self.team = team
+        self.capacity_h1 = capacity_h1
+        self.capacity_h2 = capacity_h2
         self.length = length
         self.breadth = breadth
         self.block_breadth = block_breadth
@@ -125,6 +114,10 @@ class Bay:
         self.block_turnover_weight = block_turnover_weight
         self.sink = sink
         self.monitor = monitor
+
+        self.occupied_space = 0
+        self.workload_h1 = 0
+        self.workload_h2 = 0
 
         self.processes = {}
         self.blocks_in_bay = {}
@@ -135,6 +128,10 @@ class Bay:
 
         self.processes[block.id] = self.env.process(self._work(block))
         self.blocks_in_bay[block.id] = block
+
+        self.occupied_space += block.length * block.breadth
+        self.workload_h1 += block.workload_h1
+        self.workload_h2 += block.workload_h2
 
     def _work(self, block):
         # 공간 배치 알고리즘 추후 연결
@@ -163,6 +160,9 @@ class Bay:
                                 event="Working_Finished")
 
         del self.monitor.blocks_working[block.id]
+        self.occupied_space -= block.length * block.breadth
+        self.workload_h1 -= block.workload_h1
+        self.workload_h2 -= block.workload_h2
 
         self.sink.put(block)
 
