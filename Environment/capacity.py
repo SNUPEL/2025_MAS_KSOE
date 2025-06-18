@@ -11,8 +11,6 @@ def generating_df_team_name(work, team_name, factory=None):
         df_per_day_1 = df[['정반_코드', '취부팀_코드', '착수실적', '완료실적', '실적공기', 'H01']]
         if factory:
             df_per_day_1 = df_per_day_1[df_per_day_1['정반_코드'] == factory]
-        else:
-            df_per_day_1 = df[['취부팀_코드', '착수실적', '완료실적', '실적공기', 'H01']]
 
         idx_1 = df_per_day_1[df_per_day_1['취부팀_코드'] == 'XXX'].index
         df_per_day_1 = df_per_day_1.drop(idx_1)
