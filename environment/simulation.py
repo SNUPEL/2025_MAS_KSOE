@@ -126,6 +126,10 @@ class Bay:
         self.sink = sink
         self.monitor = monitor
 
+        self.occupied_space = 0
+        self.workload_h1 = 0
+        self.workload_h2 = 0
+
         self.processes = {}
         self.blocks_in_bay = {}
         self.call_for_spatial_arrangement = {}
@@ -135,6 +139,10 @@ class Bay:
 
         self.processes[block.id] = self.env.process(self._work(block))
         self.blocks_in_bay[block.id] = block
+
+        self.occupied_space += block.length * block.breadth
+        self.workload_h1 += block.workload_h1
+        self.workload_h2 += block.workload_h2
 
     def _work(self, block):
         # 공간 배치 알고리즘 추후 연결
@@ -163,6 +171,9 @@ class Bay:
                                 event="Working_Finished")
 
         del self.monitor.blocks_working[block.id]
+        self.occupied_space -= block.length * block.breadth
+        self.workload_h1 -= block.workload_h1
+        self.workload_h2 -= block.workload_h2
 
         self.sink.put(block)
 

@@ -102,6 +102,8 @@ class Factory:
                 "bay": self.num_bays
             }
 
+        self.mask = None
+
     def step(self, action):
         if self.agent_mode == "agent1":
             block_id = action
@@ -195,10 +197,124 @@ class Factory:
         return local_observation
 
     def _get_mask(self):
-        pass
+        num_rows = self.num_bays
+        num_columns = self.num_blocks
+
+        mask = np.zeros((num_rows, num_columns), dtype=bool)
+
+        for block in self.monitor.queue_for_agent1.values():
+            process_type = block.process_type
+            weight = block.weight
+            breadth = block.breadth
+            height = block.height
+
+            for bay in self.bays.values():
+                flag_size_availability = (breadth <= bay.block_breadth) and (height <= bay.block_height)
+                if process_type == "Final조립":
+                    flag_weight_availability = (weight <= bay.block_turnover_weight)
+                else:
+                    flag_weight_availability = (weight <= bay.block_weight)
+
+                mask[bay.id, block.id] = flag_size_availability & flag_weight_availability
+
+        mask = torch.tensor(mask, dtype=torch.bool).to(self.device)
+
+        return mask
 
     def _get_local_observation(self):
-        pass
+        if self.agent_mode == "agent1":
+            if self.agent1 == "RL":
+                pass
+            else:
+                priority_idx = np.zeros(self.num_blocks)
+
+                # shortest processing time (SPT)
+                if self.agent1 == "SPT":
+                    for block in self.monitor.queue_for_agent1.values():
+                        priority_idx[block.id] = 1 / block.duration
+                # earliest due date (EDD)
+                elif self.agent1 == "EDD":
+                    for block in self.monitor.queue_for_agent1.values():
+                        priority_idx[block.id] = 1 / block.due_date
+                # modified due date (MDD)
+                elif self.agent1 == "MDD":
+                    for block in self.monitor.queue_for_agent1.values():
+                        priority_idx[block.id] = 1 / max(block.due_date, self.current_date + block.duration)
+                # least slack time (LST)
+                elif self.agent1 == "LST":
+                    for block in self.monitor.queue_for_agent1.values():
+                        priority_idx[block.id] = 1 / (block.duration - self.current_date - block.duration) \
+                            if block.duration - self.current_date - block.duration > 0 else 1
+                # random (RAND)
+                else:
+                    for block in self.monitor.queue_for_agent1.values():
+                        priority_idx[block.id] = 1
+
+        elif self.agent_mode == "agent2":
+            if self.agent2 == "RL":
+                pass
+            else:
+                priority_idx = np.zeros(self.num_bays)
+
+                # minimum number of blocks (MNB)
+                if self.agent2 == "MNB":
+                    for bay in self.bays.values():
+                        priority_idx[bay.id] = 1 / len(bay.blocks_in_bay) if len(bay.blocks_in_bay) > 0 else 1
+                # largest space remaining (LSR)
+                elif self.agent2 == "LSR":
+                    for bay in self.bays.values():
+                        occupied_space_ratio = bay.occupied_space / (bay.length * bay.breadth) * 100
+                        priority_idx[bay.id] = 1 / occupied_space_ratio if occupied_space_ratio > 0 else 1
+                # lowest capacity remaining (LCR)
+                elif self.agent2 == "LCR":
+                    for bay in self.bays.values():
+                        capacity_ratio_h1 = bay.workload_h1 / bay.team.capacity_h1 * 100
+                        capacity_ratio_h2 = bay.workload_h2 / bay.team.capacity_h2 * 100
+                        capacity_ratio_avg = (capacity_ratio_h1 + capacity_ratio_h2) / 2
+                        priority_idx[bay.id] = 1 / capacity_ratio_avg if capacity_ratio_avg > 0 else 1
+                # randon (RAND)
+                else:
+                    for bay in self.bays.values():
+                        priority_idx[bay.id] = 1
+
+        elif self.agent_mode == "agent3":
+            # no-fit polygon (NFP)
+            if self.agent3 == "NFP":
+                pass
+            # bottom left fill (BLF)
+            elif self.agent3 == "BLF":
+                pass
+            # random (RAND)
+            else:
+                pass
+        else:
+            raise Exception("Invalid agent_mode")
+
+        if self.agent_mode == "agent1":
+            state = State()
+            self.mask = self._get_mask()
+
+            if self.agent1 == "RL":
+                state.update(graph_feature=graph_feature,
+                             mask=self.mask)
+            else:
+                state.update(priority_idx=priority_idx,
+                             mask=self.mask)
+
+        elif self.agent_mode == "agent2":
+            state = State()
+
+            if self.agent2 == "RL":
+                state.update(graph_feature=graph_feature,
+                             mask=self.mask)
+            else:
+                state.update(priority_idx=priority_idx,
+                             mask=self.mask)
+
+        elif self.agent_mode == "agent3":
+            pass
+
+        return state
 
     def _calculate_reward(self):
         pass
