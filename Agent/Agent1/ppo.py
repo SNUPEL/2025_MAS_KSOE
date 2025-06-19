@@ -73,7 +73,7 @@ class RollOutMemory:
         return graph_features, masks, actions, rewards, values, dones, log_probs
 
 
-class CTAgent:
+class Agent1:
     def __init__(self, meta_data,  # 그래프 구조에 대한 정보
                  state_size,  # 노드 타입 별 특성 벡터(node feature)의 크기
                  num_nodes,  # 노드 타입 별 그래프 내 노드의 개수
