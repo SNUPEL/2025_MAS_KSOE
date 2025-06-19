@@ -67,41 +67,41 @@ class Factory:
         self.eligibility_matrix = self._get_eligibility_matrix()
 
         if agent1 == "RL":
-            self.agent1_block_feature_dim = 8
-            self.agent1_bay_feature_dim = 8
+            self.block_feature_dim_agent1 = 8
+            self.bay_feature_dim_agent1 = 8
 
-            self.agent1_meta_data = (
+            self.meta_data_agent1 = (
                 ["block", "bay",],
                 [("block", "block_to_block", "block"),
                  ("bay", "bay_to_block", "block"),
                  ("block", "block_to_bay", "bay")])
 
-            self.agent1_state_size = {
-                "block": self.agent1_block_feature_dim,
-                "bay": self.agent1_bay_feature_dim,
+            self.state_size_agent1 = {
+                "block": self.block_feature_dim_agent1,
+                "bay": self.bay_feature_dim_agent1,
             }
 
-            self.agent1_num_nodes = {
+            self.num_nodes_agent1 = {
                 "block": self.num_blocks,
                 "bay": self.num_bays
             }
 
         if agent2 == "RL":
-            self.agent2_block_feature_dim = 8
-            self.agent2_bay_feature_dim = 8
+            self.block_feature_dim_agent2 = 8
+            self.bay_feature_dim_agent2 = 8
 
-            self.agent2_meta_data = (
+            self.meta_data_agent2 = (
                 ["block", "bay",],
                 [("bay", "bay_to_bay", "bay"),
                  ("bay", "bay_to_block", "block"),
                  ("block", "block_to_bay", "bay")])
 
-            self.agent2_state_size = {
-                "block": self.agent1_block_feature_dim,
-                "bay": self.agent1_bay_feature_dim,
+            self.state_size_agent2 = {
+                "block": self.block_feature_dim_agent2,
+                "bay": self.bay_feature_dim_agent2,
             }
 
-            self.agent2_num_nodes = {
+            self.num_nodes_agent2 = {
                 "block": self.num_blocks,
                 "bay": self.num_bays
             }
@@ -263,8 +263,8 @@ class Factory:
         if self.agent_mode == "agent1":
             if self.agent1 == "RL":
                 # 노드 특성 벡터 생성
-                block_feature = np.zeros((self.num_blocks, self.agent1_block_feature_dim))
-                bay_feature = np.zeros((self.num_bays, self.agent1_bay_feature_dim))
+                block_feature = np.zeros((self.num_blocks, self.block_feature_dim_agent1))
+                bay_feature = np.zeros((self.num_bays, self.bay_feature_dim_agent1))
 
                 # 그래프 내 노드 간 엣지 모델링
                 edge_block_to_block = [[], []]
@@ -327,8 +327,8 @@ class Factory:
         elif self.agent_mode == "agent2":
             if self.agent2 == "RL":
                 # 노드 특성 벡터 생성
-                block_feature = np.zeros((self.num_blocks, self.agent2_block_feature_dim))
-                bay_feature = np.zeros((self.num_bays, self.agent2_bay_feature_dim))
+                block_feature = np.zeros((self.num_blocks, self.block_feature_dim_agent2))
+                bay_feature = np.zeros((self.num_bays, self.bay_feature_dim_agent2))
 
                 # 그래프 내 노드 간 엣지 모델링
                 edge_bay_to_bay = [[], []]
