@@ -1,5 +1,7 @@
 import pandas as pd
 
+
+
 # 취부/용접 작업에 맞춰서 취부/용접팀 이름과 정반_코드에 맞도록 데이터프레임을 생성하는 함수
 # 정반_코드가 없으면 팀 자체의 데이터프레임을 뽑음
 def generating_df_team_name(work, team_name, factory=None):
@@ -38,15 +40,19 @@ def generating_df_team_name(work, team_name, factory=None):
     return df_team_name
 
 
-# 위에서 생성한 팀별 데이터프레임을 이용하여 capacity를 계산하는 함수
 def make_capacity(work, team_name, factory=None):
     df = generating_df_team_name(work, team_name, factory)
+    df = df.sort_values('착수실적')
     df.index = range(len(df))
 
-    df_capacity = pd.read_excel('../data/capacity data.xlsx', sheet_name=team_name)     # 블록별 작업일자와 근무일/휴일 여부를 모은 파일. 생성 방법은 추후 생각 예정
+
+    df_capacity = pd.read_excel('../data/capacity data.xlsx', sheet_name=team_name)
+
     ser_date = pd.Series(pd.date_range(str(df_capacity.loc[0, '날짜']), str(df_capacity.loc[df_capacity.shape[0] - 1, '날짜'])))
-    df_capacity['정반_코드'] = df['정반_코드']
     df_capacity['날짜'] = ser_date
+
+    if factory:
+        df_capacity['정반_코드'] = factory
 
     # 누적 노동량 컬럼 초기화
     df_capacity['Capacity'] = 0.0
@@ -86,3 +92,14 @@ def make_capacity(work, team_name, factory=None):
                             break  # 한 번만 차감해야 하니까 break
 
     return df_capacity
+
+team = 'B02'
+
+for work in ['H01', 'H02']:
+    for factory in ['M211', 'M212']:
+        file_path = '../data/capacity_data_' + team + '_' + work + '_' + factory + '.xlsx'
+        df_capacity = make_capacity(work, team, factory)
+        print(f'{team}_{work}_{factory} capacity :', df_capacity['Capacity'].max())
+        df_capacity.to_excel(file_path)
+
+        print(f'{work}_{factory} 시트 변환 완료')
