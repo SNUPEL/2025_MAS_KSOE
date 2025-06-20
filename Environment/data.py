@@ -7,6 +7,7 @@ class DataGenerator:
 
         self.num_blocks = num_blocks
 
+
     def generate(self, file_path=None):
         columns = ["Block_Name", "Block_ID", "Process_Type", "Ship_Type", "Start_Date", "Duration", "Due_Date",
                    "Workload_H01", "Workload_H02", "Weight", "Length", "Breadth", "Height"]
