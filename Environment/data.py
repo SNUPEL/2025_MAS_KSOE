@@ -83,6 +83,7 @@ class DataGenerator:
         self.df_startplan_count['Proportion'] = self.df_startplan_count['count'] / self.df_startplan_count[
             'count'].sum()
 
+
     def generate_process(self, group_code):         # 공종 명칭 생성 함수, 공정이 나오는 비율에 맞춰서 데이터 생성
         df_process_group = self.df_group_count[self.df_group_count['선종_블록'] == group_code]
         # 각 count 값을 올바르게 추출
@@ -96,6 +97,7 @@ class DataGenerator:
 
         process_type = np.random.choice(['평중조', '곡중조', '대조중조', 'Final조립'], p=proportion_list)
         return process_type
+
 
     def generate_group(self):  # 그룹을 선택한 후 선종과 블록 종류로 나누기 위한 함수
         # 그룹화를 위한 새로운 데이터프레임 생성
@@ -116,11 +118,11 @@ class DataGenerator:
 
         return (group, ship_type, block_type)
 
+
     def generate_weight(self, group_code, process_type, length, breadth, height):
         if process_type == 'Final조립':
             df_revised_for_weight = self.df_revised_for_group[self.df_revised_for_group['선종_블록'] == group_code]
-            df_revised_for_weight['LBH'] = df_revised_for_weight['L'] * df_revised_for_weight['H'] * \
-                                           df_revised_for_weight['B']
+            df_revised_for_weight['LBH'] = df_revised_for_weight['L'] * df_revised_for_weight['H'] * df_revised_for_weight['B']
 
             # Final조립의 선형 피팅 모델 구현(group_code에 따라 달라짐)
             df_revised_for_final = df_revised_for_weight[df_revised_for_weight['공종_명칭'] == 'Final조립']
@@ -133,12 +135,28 @@ class DataGenerator:
             LBH_value = length * breadth * height
 
             weight = reg.coef_[0] * LBH_value + reg.intercept_
+            weight = np.int64(weight)
 
             # 중조 공정(평중조, 곡중조, 대조중조)에 관해서는 0으로 결정
         else:
             weight = 0
 
         return weight
+
+
+    def generate_duration(self, group_code, workload_H01, workload_H02):
+        df_for_duration = self.df_revised_for_group[self.df_revised_for_group['선종_블록'] == group_code]
+
+        x = df_for_duration[['H01', 'H02']]
+        y = df_for_duration['계획공기']
+
+        reg = linear_model.LinearRegression()
+        reg.fit(x, y)
+
+        duration = reg.coef_[0] * workload_H01 + reg.coef_[1] * workload_H02 + reg.intercept_
+        duration = np.int64(duration)
+
+        return duration
 
 
 
@@ -165,7 +183,7 @@ class DataGenerator:
             block_type = group_results[2]
             process_type = self.generate_process(group_code)
             start_date =
-            duration =
+
             due_date =
             length =
             breadth =
@@ -173,7 +191,7 @@ class DataGenerator:
             weight = self.generate_weight(group_code, process_type, length, breadth, height)
             workload_h01 =
             workload_h02 =
-
+            duration = self.generate_duration(group_code, workload_h01, workload_h02)
 
 
             row = [name, id, process_type, ship_type, block_type, start_date, duration, due_date,
