@@ -1,10 +1,12 @@
 import pandas as pd
 import numpy as np
+from sklearn import linear_model
 
 class DataGenerator:
     def __init__(self,
                  num_blocks=50):
 
+        self.num_blocks = num_blocks
         self.df = pd.read_excel('../data/블록-계획데이터(예제)_수정.xlsx')
 
         # 없는 데이터를 전부 제거한 데이터프레임 생성(이후 이 데이터프레임을 사용)
@@ -27,7 +29,7 @@ class DataGenerator:
         # self.df_process_count['Proportion'] = self.df_process_count['count'] / self.df_process_count['count'].sum()
 
         # 그룹 개수에 대한 데이터프레임
-        self.df_revised_for_group = self.df_revised
+        self.df_revised_for_group = self.df_revised.copy()
         group_list = []
         for i in range(self.df_revised.shape[0]):
             group_code = self.df_revised.loc[i, '선종_코드'] + '_' + self.df_revised.loc[i, '블록'][0]
@@ -112,7 +114,35 @@ class DataGenerator:
         ship_type = group[0:2]
         block_type = group[-1]
 
-        return (ship_type, block_type)
+        return (group, ship_type, block_type)
+
+    def generate_weight(self, group_code, process_type, length, breadth, height):
+        if process_type == 'Final조립':
+            df_revised_for_weight = self.df_revised_for_group[self.df_revised_for_group['선종_블록'] == group_code]
+            df_revised_for_weight['LBH'] = df_revised_for_weight['L'] * df_revised_for_weight['H'] * \
+                                           df_revised_for_weight['B']
+
+            # Final조립의 선형 피팅 모델 구현(group_code에 따라 달라짐)
+            df_revised_for_final = df_revised_for_weight[df_revised_for_weight['공종_명칭'] == 'Final조립']
+            x = df_revised_for_final['LBH'].to_numpy()
+            x = x.reshape(-1, 1)
+            y = df_revised_for_final['W'].to_numpy()
+            reg = linear_model.LinearRegression()
+            reg.fit(x, y)
+
+            LBH_value = length * breadth * height
+
+            weight = reg.coef_[0] * LBH_value + reg.intercept_
+
+            # 중조 공정(평중조, 곡중조, 대조중조)에 관해서는 0으로 결정
+        else:
+            weight = 0
+
+        return weight
+
+
+
+
 
     def generate(self, file_path=None):
         columns = ["Block_Name", "Block_ID", "Process_Type", "Ship_Type", "Block_Type", "Start_Date", "Duration", "Due_Date",
@@ -137,12 +167,14 @@ class DataGenerator:
             start_date =
             duration =
             due_date =
-            workload_h01 =
-            workload_h02 =
-            weight =
             length =
             breadth =
             height =
+            weight = self.generate_weight(group_code, process_type, length, breadth, height)
+            workload_h01 =
+            workload_h02 =
+
+
 
             row = [name, id, process_type, ship_type, block_type, start_date, duration, due_date,
                    workload_h01, workload_h02, weight, length, breadth, height]
