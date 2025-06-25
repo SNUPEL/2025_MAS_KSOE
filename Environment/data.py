@@ -1,6 +1,8 @@
 import pandas as pd
 import numpy as np
 from sklearn import linear_model
+from scipy import stats
+from fitter import Fitter, get_common_distributions
 
 class DataGenerator:
     def __init__(self,
@@ -118,6 +120,58 @@ class DataGenerator:
 
         return (group, ship_type, block_type)
 
+    def generate_property(self, group_code, property):
+        df_code = self.df_revised_for_group[self.df_revised_for_group['선종_블록'] == group_code]
+        df_for_fit = df_code[['선종_블록', property]]
+        df_for_fit_count = pd.DataFrame(df_for_fit[property].value_counts())
+        df_for_fit_count.reset_index(inplace=True)
+        df_for_fit_count.sort_values(property, inplace=True)
+
+        df_for_fit_count['Density'] = df_for_fit_count['count'] / df_for_fit_count['count'].sum()
+
+        data = []
+        for p, c in zip(df_for_fit_count[property], df_for_fit_count['count']):
+            data.extend([p] * c)
+        data = np.array(data)
+        distributions_list = get_common_distributions()
+
+        f = Fitter(data, distributions=distributions_list)
+        f.fit()
+
+        best_distribution = f.get_best()
+        best_distribution_name = list(best_distribution.keys())[0]
+        best_params = f.fitted_param[best_distribution_name]
+
+        property_value = 0
+
+        if best_distribution_name == 'cauchy':
+            property_value = stats.cauchy.rvs(*best_params)
+        elif best_distribution_name == 'expon':
+            property_value = stats.expon.rvs(*best_params)
+        elif best_distribution_name == 'gamma':
+            property_value = stats.gamma.rvs(*best_params)
+        elif best_distribution_name == 'norm':
+            property_value = stats.norm.rvs(*best_params)
+        elif best_distribution_name == 'exponpow':
+            property_value = stats.exponpow.rvs(*best_params)
+        elif best_distribution_name == 'lognorm':
+            property_value = stats.lognorm.rvs(*best_params)
+        elif best_distribution_name == 'powerlaw':
+            property_value = stats.powerlaw.rvs(*best_params)
+        elif best_distribution_name == 'reyleigh':
+            property_value = stats.reyleigh.rvs(*best_params)
+        elif best_distribution_name == 'uniform':
+            property_value = stats.uniform.rvs(*best_params)
+
+        if property_value > df_for_fit_count[property].max():
+            property_value = df_for_fit_count[property].max()
+        elif property_value < df_for_fit_count[property].min():
+            property_value = df_for_fit_count[property].min()
+
+        property_value = np.floor(property_value * 10) / 10
+
+        return property_value
+
 
     def generate_weight(self, group_code, process_type, length, breadth, height):
         if process_type == 'Final조립':
@@ -185,9 +239,9 @@ class DataGenerator:
             start_date =
 
             due_date =
-            length =
-            breadth =
-            height =
+            length = self.generate_property(group_code, 'L')
+            breadth = self.generate_property(group_code, 'B')
+            height = self.generate_property(group_code, 'H')
             weight = self.generate_weight(group_code, process_type, length, breadth, height)
             workload_h01 =
             workload_h02 =
