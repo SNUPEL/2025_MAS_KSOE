@@ -1,14 +1,22 @@
 import torch
 import simpy
 import numpy as np
+import os
 import pandas as pd
 
 from torch_geometric.data import HeteroData
 from Environment.data import DataGenerator
 from Environment.simulation import *
 
+import pyclipper
+import matplotlib.pyplot as plt
+
 
 class State:
+    """
+    상태를 나타냅니다.
+    알고리즘이 강화학습일 경우 graph 피처와 pairwise 피처, mask 변수를 사용합니다. 그렇지 않을 경우 우선순위 인덱스와 마스크를 사용합니다.
+    """
     def __init__(self, algorithm="RL"):
         self.algorithm = algorithm
         if algorithm == "RL":
@@ -24,6 +32,14 @@ class State:
                pairwise_feature=None,
                priority_idx=None,
                mask=None):
+        """
+
+        :param graph_feature:
+        :param pairwise_feature:
+        :param priority_idx:
+        :param mask:
+        :return:
+        """
 
         if self.algorithm == "RL":
             self.graph_feature = graph_feature
@@ -32,6 +48,84 @@ class State:
         else:
             self.priority_idx = priority_idx
             self.mask = mask
+            self.mask = mask
+
+
+def place_block(action):
+    import pyclipper
+    import matplotlib.pyplot as plt
+
+    # 공간 크기
+    container_width = 100
+    container_height = 100
+
+    # 배치할 블록들 (w, h)
+    blocks = [(30, 30), (20, 40), (40, 20), (10, 10)]
+
+    # 배치된 블록들
+    placed_blocks = []
+
+    # 정수 좌표화를 위한 스케일
+    SCALE = 1000
+
+    def scale_up(poly):
+        return [(int(x * SCALE), int(y * SCALE)) for x, y in poly]
+
+    def scale_down(poly):
+        return [(x / SCALE, y / SCALE) for x, y in poly]
+
+    def rect(x, y, w, h):
+        return [(x, y), (x + w, y), (x + w, y + h), (x, y + h)]
+
+    # 전체 공간을 하나의 polygon으로
+    free_area = rect(0, 0, container_width, container_height)
+
+    # 블록 배치 루프
+    for (w, h) in blocks:
+        block_shape = rect(0, 0, w, h)
+        block_shape_scaled = scale_up(block_shape)
+
+        # NFP를 빈 공간과의 관계로 생성
+        nfp_candidates = pyclipper.MinkowskiDiff(scale_up(free_area), block_shape_scaled)
+
+        placed = False
+        for candidate in nfp_candidates:
+            candidate = scale_down(candidate)
+            for cx, cy in candidate:
+                test_block = rect(cx, cy, w, h)
+
+                # 기존 블록과 충돌 체크
+                collision = False
+                for pb in placed_blocks:
+                    if not (
+                            cx + w <= pb[0][0] or
+                            cx >= pb[2][0] or
+                            cy + h <= pb[0][1] or
+                            cy >= pb[2][1]
+                    ):
+                        collision = True
+                        break
+                if not collision:
+                    placed_blocks.append(test_block)
+                    placed = True
+                    break
+            if placed:
+                break
+
+    # 시각화
+    fig, ax = plt.subplots()
+    ax.set_xlim(0, container_width)
+    ax.set_ylim(0, container_height)
+    ax.set_aspect('equal')
+
+    for block in placed_blocks:
+        xs = [x for x, y in block] + [block[0][0]]
+        ys = [y for x, y in block] + [block[0][1]]
+        ax.fill(xs, ys, color='skyblue', edgecolor='black', alpha=0.6)
+
+    plt.title("Minkowski-based Rectangle Packing")
+    plt.grid(True)
+    plt.show()
 
 
 class Factory:
@@ -51,8 +145,8 @@ class Factory:
         self.agent1 = agent1
         self.agent2 = agent2
         self.agent3 = agent3
-        self.use_recording = use_recording
-        self.use_communication = use_communication
+        self.use_recording = use_recording              # TODO: (확인 필요) 레코딩 기능? Simpy에서 제공하는 monitoring 때문에 사용하는 것인지?
+        self.use_communication = use_communication      # TODO: (확인 필요) Communication을 사용하는 것은 멀티 에이전트를 고려한 것으로 추정
 
         if type(block_data_src) is DataGenerator:
             self.df_blocks = block_data_src.generate()
@@ -67,8 +161,8 @@ class Factory:
         self.eligibility_matrix = self._get_eligibility_matrix()
 
         if agent1 == "RL":
-            self.block_feature_dim_agent1 = 8
-            self.bay_feature_dim_agent1 = 8
+            self.block_feature_dim_agent1 = 8               # TODO: (확인 필요) 왜 8개로 정한 것인지?
+            self.bay_feature_dim_agent1 = 8                 # TODO: (확인 필요) 왜 8개로 한 것인지?
 
             self.meta_data_agent1 = (
                 ["block", "bay",],
@@ -135,6 +229,9 @@ class Factory:
 
         else:
             # 공간 배치 알고리즘 추후 연결
+            # TODO: (확인 필요) 여기서 action이 무엇인지?
+            place_block(action)
+
 
             self.agent_mode = "agent1"
 
@@ -185,7 +282,7 @@ class Factory:
         self.current_date = 0
 
         while True:
-            if self.monitor.call_agent1:
+            if self.monitor.call_agent1:            # TODO: (확인 필요) 여기 루프의 역할이 무엇인지?
                 while self.sim_env.now in [event[0] for event in self.sim_env._queue]:
                     self.sim_env.step()
                 break
@@ -199,6 +296,10 @@ class Factory:
         return local_observation
 
     def _get_eligibility_matrix(self):
+        """
+        블록과 베이가 사용 가능한지 여부를 확인하는 마스킹입니다.
+        :return:
+        """
         eligibility_matrix = np.zeros((self.num_blocks, self.num_bays), dtype=bool)
 
         for _, block_info in self.df_blocks.iterrows():
@@ -220,6 +321,10 @@ class Factory:
         return eligibility_matrix
 
     def _get_mask(self):
+        """
+        TODO: (확인 필요) 위의 _get_eligibility_matrix와의 차이가 무엇인지?
+        :return:
+        """
         num_rows = self.num_bays
         num_columns = self.num_blocks
 
@@ -259,7 +364,11 @@ class Factory:
 
         return mask
 
-    def _get_local_observation(self):
+    def _get_local_observation(self):       # TODO: (확인 필요) 이 함수가 어떤 역할을 하는지?
+        """
+
+        :return:
+        """
         if self.agent_mode == "agent1":
             if self.agent1 == "RL":
                 # 노드 특성 벡터 생성
@@ -490,17 +599,19 @@ if __name__ == '__main__':
     import random
     from Agent.Agent1.heuristic import BSHeuristic
     from Agent.Agent2.heuristic import BAHeuristic
+    from Agent.Agent3.heuristic import BPHeuristic
 
-    algorithm_agent1 = "SPT"
-    algorithm_agent2 = "MNB"
-    algorithm_agent3 = "BLF"
+    algorithm_agent1 = "SPT"                    # Shortest Processing Time
+    algorithm_agent2 = "MNB"                    # Minumum Number of Blocks
+    algorithm_agent3 = "BLF"                    # Bottom Left Fill
 
     agent1 = BSHeuristic(algorithm_agent1)
     agent2 = BAHeuristic(algorithm_agent2)
+    agent3 = BPHeuristic(algorithm_agent3)
 
     # data_src = DataGenerator()
-    block_data_src = "../input/block_data.xlsx"
-    bay_data_src = "../input/bay_config.xlsx"
+    block_data_src = "input/block_data.xlsx"
+    bay_data_src = "input/bay_config.xlsx"
     env = Factory(block_data_src,
                   bay_data_src,
                   agent1=algorithm_agent1,
@@ -533,16 +644,16 @@ if __name__ == '__main__':
             # action_agent1 = np.random.choice(candidates)
             # next_state_agent2, reward_agent1, done = env.step(action_agent1)
         elif mode == "agent2":
-            action_agent2 = agent2.act(state_agent2)
+            action_agent2 = agent2.act(state_agent2)                    # Bay가 action이 됨
             next_state_agent3, reward_agent2, done = env.step(action_agent2)
             # episode_reward += reward_agent2
 
-            # mask = state_agent2.mask
+            # mask =                                                                                                                                                                                                                                                                        state_agent2.mask
             # candidates = np.where(mask == True)[0]
             # action_agent2 = np.random.choice(candidates)
             # next_state_agent3, reward_agent2, done = env.step(action_agent2)
         else:
-            action_agent3 = None
+            action_agent3 = agent3.act(state_agent3)
             next_state_agent1, reward_agent3, done = env.step(action_agent3)
 
         if mode == "agent1":

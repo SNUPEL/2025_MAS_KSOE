@@ -66,15 +66,16 @@ class DataGenerator:
             group_code = self.generate_group()
             ship_type = group_code[0]
             block_type = group_code[1]
-            start_date =
-            duration =
-            due_date =
-            workload_h01 =
-            workload_h02 =
-            weight =
-            length =
-            breadth =
-            height =
+            # HACK: 아래 start_date 부터 height까지는 임의로 배정
+            start_date = 0
+            duration = 10
+            due_date = 20
+            workload_h01 = 100
+            workload_h02 = 100
+            weight = 10
+            length = 10
+            breadth = 10
+            height = 10
 
             row = [name, id, process_type, ship_type, block_type, start_date, duration, due_date,
                    workload_h01, workload_h02, weight, length, breadth, height]

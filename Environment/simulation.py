@@ -49,10 +49,14 @@ class Source:
         self.monitor = monitor
 
         self.sent = 0
-        self.call_for_machine_scheduling = {}
+        self.call_for_machine_scheduling = {}               # TODO: (확인 필요) 스케줄링 대기 딕셔너리
         self.process = env.process(self._generate())
 
     def _generate(self):
+        """
+        블록들에게 프로세스를 할당합니다.
+        :return:
+        """
         for block in self.blocks:
             self.monitor.blocks_unscheduled[block.id] = block
 
@@ -70,6 +74,12 @@ class Source:
                 break
 
     def _run(self, block):
+        """
+        블록 별로 Bay를 할당합니다.
+        Bay가 할당될 경우 스케줄링 대상 딕셔너리, 미 스케줄링 딕셔너리에서 제외됩니다.
+        :param block:
+        :return:
+        """
         self.monitor.add_to_queue(block, agent="agent1")
         self.monitor.set_scheduling_flag(scheduling_mode="machine_scheduling")
         self.call_for_machine_scheduling[block.id] = self.env.event()
@@ -124,6 +134,11 @@ class Bay:
         self.call_for_spatial_arrangement = {}
 
     def put(self, block):
+        """
+
+        :param block:
+        :return:
+        """
         self.monitor.blocks_working[block.id] = block
 
         self.processes[block.id] = self.env.process(self._work(block))
@@ -198,7 +213,7 @@ class Monitor:
 
         self.use_recording = use_recording
 
-        self.queue_for_agent1 = {}
+        self.queue_for_agent1 = {}              # TODO: (확인 필요) Dicitonary가 언제 채워지는지?
         self.queue_for_agent2 = None
         self.queue_for_agent3 = None
 

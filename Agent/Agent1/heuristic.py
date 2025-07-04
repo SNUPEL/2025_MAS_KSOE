@@ -1,7 +1,9 @@
 import numpy as np
 
-
 class BSHeuristic:
+    """
+    착수할 블록을 결정하는 휴리스틱 클래스입니다.
+    """
     def __init__(self, name):
         self.name = name
 

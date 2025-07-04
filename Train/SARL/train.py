@@ -7,12 +7,15 @@ import numpy as np
 
 from torch.utils.tensorboard import SummaryWriter
 
+from Agent.Agent3.heuristic import BPHeuristic
+from Agent.Agent3.network import BPScheduler
 from Environment.environment import Factory
 from Environment.data import DataGenerator
 from Agent.Agent1.heuristic import BSHeuristic
 from Agent.Agent2.heuristic import BAHeuristic
 from Agent.Agent1.ppo import Agent1
 from Agent.Agent2.ppo import Agent2
+from Agent.Agent3.ppo import Agent3
 from Train.SARL.validate import evaluate
 
 
@@ -112,8 +115,8 @@ def train(config):
     lmbda = config.lmbda
     eps_clip = config.eps_clip
     K_epoch = config.K_epoch
-    T_horizon = config.T_horizon
-    P_coeff = config.P_coeff
+    T_horizon = config.T_horizon                # 시간 수평선(Time Horizon), Episode 길이, Roll Out 길이
+    P_coeff = config.P_coeff                    # TODO: P_coeff가 무엇인지?
     V_coeff = config.V_coeff
     E_coeff = config.E_coeff
     use_value_clipping = False if config.no_value_clipping else True
@@ -209,7 +212,10 @@ def train(config):
         agent2 = BAHeuristic(algorithm_agent2)
 
     # 추후 공간 배치 에이전트 추가 예정
-    agent3 = None
+    if algorithm_agent3 == "RL":  # TODO: (확인 필요) (RL이 아닌 거 같던데 이 라인과 Agent3()를 넣는 것이 맞는지?)
+        pass
+    else:
+        agent3 = BPHeuristic(algorithm_agent3)
 
     if not use_vessl:
         writer = SummaryWriter(log_dir)
@@ -223,6 +229,8 @@ def train(config):
             checkpoint = torch.load(pretrained_model_path_agent2)
             agent2.network.load_state_dict(checkpoint['model_state_dict'])
             agent2.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        if algorithm_agent3 == "RL":
+            pass # TODO: (확인 필요) 해당 코드를 작성하는 것이 맞는지?
 
     with open(log_dir + "train_log.csv", 'w') as f:
         f.write('episode, reward, loss, lr\n')
@@ -235,11 +243,16 @@ def train(config):
                 vessl.log(payload={"Train/LearnigRate": agent1.scheduler.get_last_lr()[0]}, step=e)
             if algorithm_agent2 == "RL":
                 vessl.log(payload={"Train/LearnigRate": agent2.scheduler.get_last_lr()[0]}, step=e)
+            if algorithm_agent3 == "RL":
+                pass                # TODO: (확인 필요) 해당 코드를 작성하는 것이 맞는지?
         else:
             if algorithm_agent1 == "RL":
                 writer.add_scalar("Training/LearningRate", agent1.scheduler.get_last_lr()[0], e)
             if algorithm_agent2 == "RL":
                 writer.add_scalar("Training/LearningRate", agent2.scheduler.get_last_lr()[0], e)
+            if algorithm_agent3 == "RL":
+                pass # TODO: (확인 필요) 해당 코드를 작성하는 것이 맞는지?
+
 
         step = 0
         step_agent1 = 0
@@ -282,8 +295,9 @@ def train(config):
                 episode_reward += reward_agent2
             elif mode == "agent3":
                 # 추후 공간 배치 에이전트 추가 예정
-                action_agent3 = None
+                action_agent3 = agent3.act(state_agent3)
                 next_state_agent1, reward_agent3, done = env.step(action_agent3)
+                episode_reward += reward_agent3
 
             if mode == "agent1":
                 if algorithm_agent2 == "RL" and step_agent2 >= 1:
@@ -299,9 +313,9 @@ def train(config):
                 state_agent3 = next_state_agent3
             elif mode == "agent3":
                 if algorithm_agent1 == "RL" and step_agent1 >= 1:
-                    agent1.put_sample(state=state_agent1,
-                                      action=action_agent1,
-                                      reward=reward_agent1 + reward_agent2 + reward_agent3,
+                    agent1.put_sample(state=state_agent3,
+                                      action=action_agent3,
+                                      reward=reward_agent3 + reward_agent3 + reward_agent2,
                                       done=done,
                                       log_prob=log_prob_agent1,
                                       value=value_agent1)

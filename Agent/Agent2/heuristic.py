@@ -2,6 +2,9 @@ import numpy as np
 
 
 class BAHeuristic:
+    """
+    작업장을 결정하는 휴리스틱 클래스입니다.
+    """
     def __init__(self, name):
         self.name = name
 
