@@ -195,4 +195,6 @@ cython_debug/
 
 .idea/
 *.xlsx
+!data/착수일 간격_피팅완료(수정).xlsx
+!data/geometric_buffer_중조.xlsx
 *.png

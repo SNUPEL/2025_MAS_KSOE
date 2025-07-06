@@ -23,6 +23,8 @@ class DataGenerator:
         self.df_revised = self.df_revised.drop(idx_4)
         idx_5 = self.df_revised[self.df_revised['실적공기'] < 0].index
         self.df_revised = self.df_revised.drop(idx_5)
+        idx_6 = self.df_revised[self.df_revised['L'] == 815].index
+        self.df_revised = self.df_revised.drop(idx_6)
         self.df_revised.reset_index(inplace=True)
 
         # 공정 개수에 대한 데이터프레임
@@ -85,6 +87,11 @@ class DataGenerator:
         self.df_startplan_count['Proportion'] = self.df_startplan_count['count'] / self.df_startplan_count[
             'count'].sum()
 
+        # 착수일 간격에 대한 데이터프레임
+        self.df_intervals_count = pd.read_excel('../data/착수일/착수일 간격_피팅완료(수정).xlsx')
+
+        self.df_buffer = pd.read_excel('../data/geometric_buffer_중조.xlsx')
+
 
     def generate_process(self, group_code):         # 공종 명칭 생성 함수, 공정이 나오는 비율에 맞춰서 데이터 생성
         df_process_group = self.df_group_count[self.df_group_count['선종_블록'] == group_code]
@@ -119,6 +126,14 @@ class DataGenerator:
         block_type = group[-1]
 
         return (group, ship_type, block_type)
+
+
+    def calculate_interval(self):  # 착수일 간격 계산을 위한 함수
+        p = self.df_intervals_count.loc[0, 'Proportion']
+        interval = stats.geom.rvs(p) - 1  # scipy의 geometric 함수의 rvs는 1부터 시작하기 때문에 1을 빼서 사용
+
+        return interval
+
 
     def generate_property(self, group_code, property):
         df_code = self.df_revised_for_group[self.df_revised_for_group['선종_블록'] == group_code]
@@ -173,50 +188,138 @@ class DataGenerator:
         return property_value
 
 
-    def generate_weight(self, group_code, process_type, length, breadth, height):
-        if process_type == 'Final조립':
-            df_revised_for_weight = self.df_revised_for_group[self.df_revised_for_group['선종_블록'] == group_code]
-            df_revised_for_weight['LBH'] = df_revised_for_weight['L'] * df_revised_for_weight['H'] * df_revised_for_weight['B']
+    def generate_weight(self, group_code, process_type, length, breadth, height, smoothing=False):
+        df_revised_for_weight = self.df_revised_for_group[self.df_revised_for_group['선종_블록'] == group_code]
+        df_revised_for_weight['LBH'] = df_revised_for_weight['L'] * df_revised_for_weight['H'] * df_revised_for_weight['B']
 
-            # Final조립의 선형 피팅 모델 구현(group_code에 따라 달라짐)
-            df_revised_for_final = df_revised_for_weight[df_revised_for_weight['공종_명칭'] == 'Final조립']
+        # Final조립의 선형 피팅 모델 구현(group_code에 따라 달라짐)
+        df_revised_for_final = df_revised_for_weight[df_revised_for_weight['공종_명칭'] == 'Final조립']
+
+        if smoothing:       # 데이터 스무딩 여부 결정
+            smoothed = []
+            half_window = 40 // 2
+            data = df_revised_for_final['W']
+            for i in range(len(data)):
+                window_start = max(0, i - half_window)
+                window_end = min(len(data), i + half_window + 1)
+                window = data[window_start:window_end]
+                median = np.median(window)
+                smoothed.append(median)
+
+            df_revised_for_final['smoothed_W'] = smoothed
+
+            x = df_revised_for_final['LBH'].to_numpy()
+            x = x.reshape(-1, 1)
+
+            y = df_revised_for_final['smoothed_W'].to_numpy()
+
+        else:
             x = df_revised_for_final['LBH'].to_numpy()
             x = x.reshape(-1, 1)
             y = df_revised_for_final['W'].to_numpy()
-            reg = linear_model.LinearRegression()
-            reg.fit(x, y)
 
-            LBH_value = length * breadth * height
+        reg = linear_model.LinearRegression()
+        reg.fit(x, y)
 
-            weight = reg.coef_[0] * LBH_value + reg.intercept_
-            weight = np.int64(weight)
+        LBH_value = length * breadth * height
 
-            # 중조 공정(평중조, 곡중조, 대조중조)에 관해서는 0으로 결정
+        if process_type == 'Final조립':
+            weight = reg.coef_[0] * LBH_value + reg.intercept_ + 10 * np.random.normal()
+
+        # 중조 무게 피팅
         else:
-            weight = 0
+            if group_code in ['CN_T', 'LN_D', 'VL_D']:      # 중조만 존재하는 그룹들이기 때문에 피팅 방법 없음
+                weight = 0
+            else:
+                y_pred = reg.coef_[0] * LBH_value + reg.intercept_
+                max_limit = y_pred * 0.7
+                min_limit = y_pred * 0.3
+                weight = stats.expon.rvs() * max_limit + np.random.normal()
+                if weight < min_limit:
+                    weight = min_limit
+                elif weight > max_limit:
+                    weight = max_limit
+
+        weight = np.int64(weight)
 
         return weight
 
 
-    def generate_duration(self, group_code, workload_H01, workload_H02):
-        df_for_duration = self.df_revised_for_group[self.df_revised_for_group['선종_블록'] == group_code]
+    def generate_workload_h01(self, group_code, length, breadth, height, weight):
+        df_for_H01 = self.df_revised_for_group[self.df_revised_for_group['선종_블록'] == group_code]
+        df_for_H01 = df_for_H01[df_for_H01['공종_명칭'] == 'Final조립']
 
-        x = df_for_duration[['H01', 'H02']]
+        min_limit = df_for_H01['H01'].min()
+
+        x = df_for_H01[['L', 'B', 'H', 'W']]
+        y = df_for_H01['H01']
+
+        reg = linear_model.LinearRegression()
+        reg.fit(x, y)
+
+        workload_h01 = reg.coef_[0] * length + reg.coef_[1] * breadth + reg.coef_[2] * height + reg.coef_[
+            3] * weight + reg.intercept_ + 10 * np.random.normal()
+
+        if workload_h01 < min_limit:
+            workload_h01 = min_limit
+
+        workload_h01 = np.int64(workload_h01)
+
+        return workload_h01
+
+
+    def generate_workload_h02(self, group_code, workload_h01):
+        df_for_H02 = self.df_revised_for_group[self.df_revised_for_group['선종_블록'] == group_code]
+
+        min_limit = df_for_H02['H02'].min()
+
+        x = df_for_H02['H01'].to_numpy()
+        x = x.reshape(-1, 1)
+
+        y = df_for_H02['H02']
+
+        reg = linear_model.LinearRegression()
+        reg.fit(x, y)
+
+        workload_h02 = reg.coef_[0] * workload_h01 + reg.intercept_ + 10 * np.random.normal()
+        if workload_h02 < min_limit:
+            workload_h02 = min_limit
+
+        workload_h02 = np.int64(workload_h02)
+
+        return workload_h02
+
+
+    def generate_duration(self, group_code, workload_H01, workload_H02, weight):
+        df_for_duration = self.df_revised_for_group[self.df_revised_for_group['선종_블록'] == group_code]
+        min_limit = df_for_duration['계획공기'].min()
+
+        x = df_for_duration[['H01', 'H02', 'W']]
         y = df_for_duration['계획공기']
 
         reg = linear_model.LinearRegression()
         reg.fit(x, y)
 
-        duration = reg.coef_[0] * workload_H01 + reg.coef_[1] * workload_H02 + reg.intercept_
+        duration = reg.coef_[0] * workload_H01 + reg.coef_[1] * workload_H02  + reg.intercept_ + reg.coef_[2] * weight + 10 * np.random.normal()
+
+        if duration < min_limit:
+            duration = min_limit
+
         duration = np.int64(duration)
 
         return duration
 
+    def calculate_buffer(self, process_type):  # column에 들어가는 값은 아님
+        if process_type == 'Final조립':
+            buffer = 2
+        else:
+            p = self.df_buffer.loc[0, 'Proportion']
+            buffer = stats.geom.rvs(p, loc=-1)
+
+        return buffer
 
 
-
-
-    def generate(self, file_path=None):
+    def generate(self, file_path='../data/데이터 생성 예시.xlsx'):
         columns = ["Block_Name", "Block_ID", "Process_Type", "Ship_Type", "Block_Type", "Start_Date", "Duration", "Due_Date",
                    "Workload_H01", "Workload_H02", "Weight", "Length", "Breadth", "Height"]
 
@@ -235,18 +338,25 @@ class DataGenerator:
             group_code = group_results[0]           # 그룹을 참조하는 데이터를 위한 입력변수로 사용
             ship_type = group_results[1]
             block_type = group_results[2]
-            process_type = self.generate_process(group_code)
-            start_date =
 
-            due_date =
+            process_type = self.generate_process(group_code)
+
+            if j == 0:
+                start_date = 0  # 첫번째 착수일은 0으로 고정
+            else:
+                interval = self.calculate_interval()
+                start_date = df_blocks[j - 1][5] + interval  # 이전 착수일에 interval을 더하는 형식으로 계산
+
+            buffer = self.calculate_buffer(process_type)
             length = self.generate_property(group_code, 'L')
             breadth = self.generate_property(group_code, 'B')
             height = self.generate_property(group_code, 'H')
             weight = self.generate_weight(group_code, process_type, length, breadth, height)
-            workload_h01 =
-            workload_h02 =
-            duration = self.generate_duration(group_code, workload_h01, workload_h02)
+            workload_h01 = self.generate_workload_h01(group_code, length, breadth, height, weight)
+            workload_h02 = self.generate_workload_h02(group_code, workload_h01)
+            duration = self.generate_duration(group_code, workload_h01, workload_h02, weight)
 
+            due_date = start_date + duration + buffer - 1
 
             row = [name, id, process_type, ship_type, block_type, start_date, duration, due_date,
                    workload_h01, workload_h02, weight, length, breadth, height]
