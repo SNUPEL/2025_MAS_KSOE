@@ -3,6 +3,7 @@ import numpy as np
 from sklearn import linear_model
 from scipy import stats
 from fitter import Fitter, get_common_distributions
+import time
 
 class DataGenerator:
     def __init__(self,
@@ -88,7 +89,7 @@ class DataGenerator:
             'count'].sum()
 
         # 착수일 간격에 대한 데이터프레임
-        self.df_intervals_count = pd.read_excel('../data/착수일/착수일 간격_피팅완료(수정).xlsx')
+        self.df_intervals_count = pd.read_excel('../data/착수일 간격_피팅완료(수정).xlsx')
 
         self.df_buffer = pd.read_excel('../data/geometric_buffer_중조.xlsx')
 
@@ -319,7 +320,7 @@ class DataGenerator:
         return buffer
 
 
-    def generate(self, file_path='../data/데이터 생성 예시.xlsx'):
+    def generate(self, file_path=None):
         columns = ["Block_Name", "Block_ID", "Process_Type", "Ship_Type", "Block_Type", "Start_Date", "Duration", "Due_Date",
                    "Workload_H01", "Workload_H02", "Weight", "Length", "Breadth", "Height"]
 
