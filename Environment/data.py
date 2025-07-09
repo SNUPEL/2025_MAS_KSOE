@@ -3,7 +3,7 @@ import numpy as np
 from sklearn import linear_model
 from scipy import stats
 from fitter import Fitter, get_common_distributions
-import time
+
 
 class DataGenerator:
     def __init__(self,
@@ -136,18 +136,18 @@ class DataGenerator:
         return interval
 
 
-    def generate_property(self, group_code, property):
+
+    def generate_property(self, group_code, process_type, property):
         df_code = self.df_revised_for_group[self.df_revised_for_group['선종_블록'] == group_code]
-        df_for_fit = df_code[['선종_블록', property]]
+        df_code_process = df_code[df_code['공종_명칭'] == process_type]
+        df_for_fit = df_code_process[['선종_블록', property]]
         df_for_fit_count = pd.DataFrame(df_for_fit[property].value_counts())
         df_for_fit_count.reset_index(inplace=True)
         df_for_fit_count.sort_values(property, inplace=True)
 
-        df_for_fit_count['Density'] = df_for_fit_count['count'] / df_for_fit_count['count'].sum()
-
         data = []
         for p, c in zip(df_for_fit_count[property], df_for_fit_count['count']):
-            data.extend([p] * c)
+            data.extend([p]*c)
         data = np.array(data)
         distributions_list = get_common_distributions()
 
@@ -158,26 +158,28 @@ class DataGenerator:
         best_distribution_name = list(best_distribution.keys())[0]
         best_params = f.fitted_param[best_distribution_name]
 
-        property_value = 0
+        rvs = 0
 
         if best_distribution_name == 'cauchy':
-            property_value = stats.cauchy.rvs(*best_params)
+            rvs = stats.cauchy.rvs(*best_params)
         elif best_distribution_name == 'expon':
-            property_value = stats.expon.rvs(*best_params)
+            rvs = stats.expon.rvs(*best_params)
         elif best_distribution_name == 'gamma':
-            property_value = stats.gamma.rvs(*best_params)
+            rvs = stats.gamma.rvs(*best_params)
         elif best_distribution_name == 'norm':
-            property_value = stats.norm.rvs(*best_params)
+            rvs = stats.norm.rvs(*best_params)
         elif best_distribution_name == 'exponpow':
-            property_value = stats.exponpow.rvs(*best_params)
+            rvs = stats.exponpow.rvs(*best_params)
         elif best_distribution_name == 'lognorm':
-            property_value = stats.lognorm.rvs(*best_params)
+            rvs = stats.lognorm.rvs(*best_params)
         elif best_distribution_name == 'powerlaw':
-            property_value = stats.powerlaw.rvs(*best_params)
+            rvs = stats.powerlaw.rvs(*best_params)
         elif best_distribution_name == 'reyleigh':
-            property_value = stats.reyleigh.rvs(*best_params)
+            rvs = stats.reyleigh.rvs(*best_params)
         elif best_distribution_name == 'uniform':
-            property_value = stats.uniform.rvs(*best_params)
+            rvs = stats.uniform.rvs(*best_params)
+
+        property_value = rvs
 
         if property_value > df_for_fit_count[property].max():
             property_value = df_for_fit_count[property].max()
@@ -195,6 +197,8 @@ class DataGenerator:
 
         # Final조립의 선형 피팅 모델 구현(group_code에 따라 달라짐)
         df_revised_for_final = df_revised_for_weight[df_revised_for_weight['공종_명칭'] == 'Final조립']
+        max_weight = df_revised_for_final['W'].max()
+        min_weight = df_revised_for_final['W'].min()
 
         if smoothing:       # 데이터 스무딩 여부 결정
             smoothed = []
@@ -225,7 +229,11 @@ class DataGenerator:
         LBH_value = length * breadth * height
 
         if process_type == 'Final조립':
-            weight = reg.coef_[0] * LBH_value + reg.intercept_ + 10 * np.random.normal()
+            weight = reg.coef_[0] * LBH_value + reg.intercept_ + np.random.normal(0, 100)
+            if weight < min_weight:
+                weight = min_weight
+            elif weight > max_weight:
+                weight = max_weight
 
         # 중조 무게 피팅
         else:
@@ -234,42 +242,45 @@ class DataGenerator:
             else:
                 y_pred = reg.coef_[0] * LBH_value + reg.intercept_
                 max_limit = y_pred * 0.7
-                min_limit = y_pred * 0.3
-                weight = stats.expon.rvs() * max_limit + np.random.normal()
-                if weight < min_limit:
-                    weight = min_limit
-                elif weight > max_limit:
-                    weight = max_limit
+
+                weight = max_limit + np.random.normal(0, 100)
+
+
 
         weight = np.int64(weight)
 
         return weight
 
 
-    def generate_workload_h01(self, group_code, length, breadth, height, weight):
+    def generate_workload_h01(self, group_code, length, breadth):
         df_for_H01 = self.df_revised_for_group[self.df_revised_for_group['선종_블록'] == group_code]
-        df_for_H01 = df_for_H01[df_for_H01['공종_명칭'] == 'Final조립']
 
-        min_limit = df_for_H01['H01'].min()
+        if group_code == 'VL_D':
+            workload_h01 = np.random.choice([189, 193], p=[0.5, 0.5])
 
-        x = df_for_H01[['L', 'B', 'H', 'W']]
-        y = df_for_H01['H01']
 
-        reg = linear_model.LinearRegression()
-        reg.fit(x, y)
+        else:
 
-        workload_h01 = reg.coef_[0] * length + reg.coef_[1] * breadth + reg.coef_[2] * height + reg.coef_[
-            3] * weight + reg.intercept_ + 10 * np.random.normal()
+            min_limit = df_for_H01['H01'].min()
 
-        if workload_h01 < min_limit:
-            workload_h01 = min_limit
+            x = df_for_H01['A'].to_numpy()
+            x = x.reshape(-1, 1)
+            y = df_for_H01['H01']
 
-        workload_h01 = np.int64(workload_h01)
+            reg = linear_model.LinearRegression()
+            reg.fit(x, y)
+
+            workload_h01 = reg.coef_[0] * length * breadth + reg.intercept_ + np.random.normal(0, 100)
+
+            if workload_h01 < min_limit:
+                workload_h01 = min_limit
+
+            workload_h01 = np.int64(workload_h01)
 
         return workload_h01
 
 
-    def generate_workload_h02(self, group_code, workload_h01):
+    def generate_workload_h02(self, group_code, workload_h01):     # H01에 비례
         df_for_H02 = self.df_revised_for_group[self.df_revised_for_group['선종_블록'] == group_code]
 
         min_limit = df_for_H02['H02'].min()
@@ -282,7 +293,7 @@ class DataGenerator:
         reg = linear_model.LinearRegression()
         reg.fit(x, y)
 
-        workload_h02 = reg.coef_[0] * workload_h01 + reg.intercept_ + 10 * np.random.normal()
+        workload_h02 = reg.coef_[0] * workload_h01 + reg.intercept_ + np.random.normal(0, 50)
         if workload_h02 < min_limit:
             workload_h02 = min_limit
 
@@ -301,7 +312,7 @@ class DataGenerator:
         reg = linear_model.LinearRegression()
         reg.fit(x, y)
 
-        duration = reg.coef_[0] * workload_H01 + reg.coef_[1] * workload_H02  + reg.intercept_ + reg.coef_[2] * weight + 10 * np.random.normal()
+        duration = reg.coef_[0] * workload_H01 + reg.coef_[1] * workload_H02  + reg.intercept_ + reg.coef_[2] * weight
 
         if duration < min_limit:
             duration = min_limit
@@ -320,7 +331,7 @@ class DataGenerator:
         return buffer
 
 
-    def generate(self, file_path=None):
+    def generate(self, file_path='../data/데이터 생성 예시_7.xlsx'):
         columns = ["Block_Name", "Block_ID", "Process_Type", "Ship_Type", "Block_Type", "Start_Date", "Duration", "Due_Date",
                    "Workload_H01", "Workload_H02", "Weight", "Length", "Breadth", "Height"]
 
@@ -349,11 +360,14 @@ class DataGenerator:
                 start_date = df_blocks[j - 1][5] + interval  # 이전 착수일에 interval을 더하는 형식으로 계산
 
             buffer = self.calculate_buffer(process_type)
-            length = self.generate_property(group_code, 'L')
-            breadth = self.generate_property(group_code, 'B')
-            height = self.generate_property(group_code, 'H')
+
+            length = self.generate_property(group_code, process_type, 'L')
+            breadth = self.generate_property(group_code, process_type, 'B')
+            height = self.generate_property(group_code, process_type, 'H')
+
             weight = self.generate_weight(group_code, process_type, length, breadth, height)
-            workload_h01 = self.generate_workload_h01(group_code, length, breadth, height, weight)
+
+            workload_h01 = self.generate_workload_h01(group_code, length, breadth)
             workload_h02 = self.generate_workload_h02(group_code, workload_h01)
             duration = self.generate_duration(group_code, workload_h01, workload_h02, weight)
 
@@ -372,3 +386,6 @@ class DataGenerator:
             writer.close()
 
         return df_blocks
+
+data_gen = DataGenerator()
+df_blocks = data_gen.generate()
