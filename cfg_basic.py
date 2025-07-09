@@ -5,11 +5,19 @@ import time
 class Configure:
     def __init__(self):
         self.data_params = dict()
-        self.data_params['n_total'] = 12132
+        self.data_params['data_revised_filepath'] = '../data/블록-계획데이터(예제)_수정_선종블록 추가.xlsx'      # 사용 데이터파일
+        self.data_params['data_group'] = '../data/선종블록_공정수.xlsx'        # 그룹별 카운트
+        self.data_params['model_for_W'] = '../data/그룹별 W 변수.xlsx'
+        self.data_params['model_for_H01'] = '../data/그룹별 H01 변수.xlsx'
+        self.data_params['model_for_H02'] = '../data/그룹별 H02 변수.xlsx'
+        self.data_params['model_for_duration'] = '../data/그룹별 duration 변수.xlsx'
+
+        self.data_params['n_total'] = 6938
         self.data_params['n_episode_data'] = 50
 
-        self.data_params['VL_D_low'] = 189
-        self.data_params['VL_D_high'] = 193
+        self.data_params['weight_max_limit_ratio'] = 0.7
+        # self.data_params['VL_D_low'] = 189
+        # self.data_params['VL_D_high'] = 193
 
         # 결과 저장
         self.data_params['ymd'] = time.strftime('%Y%m%d')
@@ -19,7 +27,7 @@ class Configure:
         self.data_params["folderpath"] = 'results/{0}_{1}h_{2}m_{3}s'.format(
             self.data_params['ymd'], self.data_params['hour'], self.data_params['minute'], self.data_params['second'])
 
-        self.save_config()
+        # self.save_config()
 
     def save_config(self):
         if not os.path.exists(self.data_params["folderpath"]):
