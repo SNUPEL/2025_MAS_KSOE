@@ -197,4 +197,9 @@ cython_debug/
 *.xlsx
 !data/착수일 간격_피팅완료(수정).xlsx
 !data/geometric_buffer_중조.xlsx
+!data/선종블록_공정수.xlsx
+!data/그룹별 W 변수.xlsx
+!data/그룹별 H01 변수.xlsx
+!data/그룹별 H02 변수.xlsx
+!data/그룹별 duration 변수.xlsx
 *.png
