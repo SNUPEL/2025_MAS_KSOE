@@ -202,4 +202,5 @@ cython_debug/
 !data/그룹별 H01 변수.xlsx
 !data/그룹별 H02 변수.xlsx
 !data/그룹별 duration 변수.xlsx
+!data/그룹별 제원 변수.xlsx
 *.png

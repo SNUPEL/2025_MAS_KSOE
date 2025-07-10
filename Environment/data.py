@@ -4,6 +4,7 @@ from sklearn import linear_model
 from scipy import stats
 from fitter import Fitter, get_common_distributions
 from cfg_basic import *
+import ast
 
 
 class DataGenerator:
@@ -68,24 +69,12 @@ class DataGenerator:
 
     def generate_property(self, group_code, process_type, property):
         df_code = self.df_revised_for_group[self.df_revised_for_group['선종_블록'] == group_code]
-        df_code_process = df_code[df_code['공종_명칭'] == process_type]
-        df_for_fit = df_code_process[['선종_블록', property]]
-        df_for_fit_count = pd.DataFrame(df_for_fit[property].value_counts())
-        df_for_fit_count.reset_index(inplace=True)
-        df_for_fit_count.sort_values(property, inplace=True)
 
-        data = []
-        for p, c in zip(df_for_fit_count[property], df_for_fit_count['count']):
-            data.extend([p]*c)
-        data = np.array(data)
-        distributions_list = get_common_distributions()
-
-        f = Fitter(data, distributions=distributions_list)
-        f.fit()
-
-        best_distribution = f.get_best()
-        best_distribution_name = list(best_distribution.keys())[0]
-        best_params = f.fitted_param[best_distribution_name]
+        df_property = pd.read_excel(self.cfg.data_params['model_for_property'], sheet_name=property)
+        df_property['best_params'] = df_property['best_params'].apply(ast.literal_eval)
+        idx = df_property[(df_property['선종_블록'] == group_code) & (df_property['process_type'] == process_type)].index
+        best_distribution_name = df_property.loc[idx, 'best_distribution_name'].values[0]
+        best_params = df_property.loc[idx, 'best_params'].values[0]
 
         rvs = 0
 
@@ -110,10 +99,10 @@ class DataGenerator:
 
         property_value = rvs
 
-        if property_value > df_for_fit_count[property].max():
-            property_value = df_for_fit_count[property].max()
-        elif property_value < df_for_fit_count[property].min():
-            property_value = df_for_fit_count[property].min()
+        if property_value > df_code[property].max():
+            property_value = df_code[property].max()
+        elif property_value < df_code[property].min():
+            property_value = df_code[property].min()
 
         property_value = np.floor(property_value * 10) / 10
 
