@@ -7,6 +7,9 @@ class Configure:
         self.data_params = dict()
         self.data_params['data_revised_filepath'] = '../data/블록-계획데이터(예제)_수정_선종블록 추가.xlsx'      # 사용 데이터파일
         self.data_params['data_group'] = '../data/선종블록_공정수.xlsx'        # 그룹별 카운트
+
+        # 항목별 모델 변수
+        self.data_params['model_for_property'] = '../data/그룹별 제원 변수.xlsx'
         self.data_params['model_for_W'] = '../data/그룹별 W 변수.xlsx'
         self.data_params['model_for_H01'] = '../data/그룹별 H01 변수.xlsx'
         self.data_params['model_for_H02'] = '../data/그룹별 H02 변수.xlsx'
