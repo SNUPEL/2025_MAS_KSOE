@@ -60,7 +60,7 @@ def get_config():
     parser.add_argument("--save_every", type=int, default=500, help="Save a model every x episodes")
     parser.add_argument("--reset_every", type=int, default=1, help="Generate new instances every x episodes")
 
-    parser.add_argument("--config_pile_path", type=str, default=".../input/bay_config.xlsx", help="configuration file path")
+    parser.add_argument("--config_file_path", type=str, default="./input/bay_config.xlsx", help="configuration file path")
     parser.add_argument("--val_dir", type=str, default=None, help="directory where the validation data are stored")
 
     return parser.parse_args()
@@ -88,7 +88,7 @@ def train(config):
         vessl.init(organization="snu-eng-dgx", project="2025_MAS_KSOE", hp=config)
 
     pretrained_model_path_agent1 = config.pretrained_model_path_agent1
-    pretrained_model_path_agent2 = config.ct_pretrained_model_path_agent2
+    pretrained_model_path_agent2 = config.pretrained_model_path_agent2
 
     num_blocks = config.num_blocks
 
@@ -124,16 +124,8 @@ def train(config):
 
     val_dir = config.val_dir
 
-    with open(val_dir + "setting.json", 'r') as f:
-        setting = json.load(f)
-
-    if config.algorithm_agent1 == "RL":
-        name = (setting["num_jobs"], setting["num_machines"], "FJSP", config.fjsp_algorithm, config.ct_algorithm)
-    if config.algorithm_agent2 == "RL":
-        name = (setting["num_jobs"], setting["num_machines"], "CT", config.fjsp_algorithm, config.ct_algorithm)
-
-    model_dir = './output/version3/train/SARL/model/%d-%d/%s/%s-%s/' % name
-    log_dir = './output/version3/train/SARL/log/%d-%d/%s/%s-%s/' % name
+    model_dir = './output/train/SARL/%s-%s-%s/model/' % (algorithm_agent1, algorithm_agent2, algorithm_agent3)
+    log_dir = './output/train/SARL/%s-%s-%s/log/' % (algorithm_agent1, algorithm_agent2, algorithm_agent3)
 
     if not os.path.exists(model_dir):
         os.makedirs(model_dir)
@@ -180,7 +172,7 @@ def train(config):
                         device=device)
 
     else:
-        agent1 = BAHeuristic(algorithm_agent1)
+        agent1 = BSHeuristic(algorithm_agent1)
 
     if algorithm_agent2 == "RL":
         agent2 = Agent2(meta_data=env.meta_data_agent2,
@@ -287,7 +279,7 @@ def train(config):
 
             if mode == "agent1":
                 if algorithm_agent2 == "RL" and step_agent2 >= 1:
-                    agent1.put_sample(state=state_agent2,
+                    agent2.put_sample(state=state_agent2,
                                       action=action_agent2,
                                       reward=reward_agent2 + +reward_agent3 + reward_agent1,
                                       done=done,
