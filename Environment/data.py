@@ -266,21 +266,22 @@ class DataGenerator:
 
             else:       # 샘플링된 그룹에 대한 처리, 한 행의 데이터를 그대로 가져오는 식으로 구현
                 df_group_code = self.df_revised_for_group[self.df_revised_for_group['선종_블록'] == group_code]
-                df_group_code.reset_index(inplace=True)
-                idx = np.random.choice(range(df_group_code.shape[0]))
+                df_process_group = df_group_code[df_group_code['공종_명칭'] == process_type]
+                df_process_group.reset_index(inplace=True)
+                idx = np.random.choice(range(df_process_group.shape[0]))
 
-                length = df_group_code.loc[idx, 'L']
-                breadth = df_group_code.loc[idx, 'B']
-                height = df_group_code.loc[idx, 'H']
+                length = df_process_group.loc[idx, 'L']
+                breadth = df_process_group.loc[idx, 'B']
+                height = df_process_group.loc[idx, 'H']
 
                 if process_type == 'Final조립':
-                    weight = df_group_code.loc[idx, 'W']
+                    weight = df_process_group.loc[idx, 'W']
                 else:       # 중조 공정일 때는 중량 계산
                     weight = self.generate_weight(group_code, process_type, length, breadth, height)
 
-                workload_h01 = df_group_code.loc[idx, 'H01']
-                workload_h02 = df_group_code.loc[idx, 'H02']
-                duration = df_group_code.loc[idx, '계획공기']
+                workload_h01 = df_process_group.loc[idx, 'H01']
+                workload_h02 = df_process_group.loc[idx, 'H02']
+                duration = df_process_group.loc[idx, '계획공기']
 
 
             due_date = start_date + duration + buffer - 1
