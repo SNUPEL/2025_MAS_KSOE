@@ -1,5 +1,6 @@
 import torch
 import simpy
+import shapely
 import numpy as np
 import pandas as pd
 
@@ -148,6 +149,8 @@ class Factory:
                     self.monitor.record(self.sim_env.now,
                                         block=block.name,
                                         bay=bay.name,
+                                        x_coordinate=x,
+                                        y_coordinate=y,
                                         event="Block_Located")
 
             self.agent_mode = "agent1"
@@ -558,7 +561,6 @@ class Factory:
             bay = Bay(sim_env,
                       name=row['Bay_Name'],
                       id=int(row['Bay_ID']),
-                      team=row['Team_Name'],
                       capacity_h1=float(row['Capacity_H01']),
                       capacity_h2=float(row['Capacity_H02']),
                       length=float(row['Bay_Length']),
