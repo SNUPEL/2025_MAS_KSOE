@@ -1,7 +1,8 @@
 import pandas as pd
 import numpy as np
-import shapely
-from shapely.geometry import Point, Polygon
+
+from shapely.geometry import Polygon
+
 
 class Block:
     def __init__(self,
@@ -82,6 +83,11 @@ class Source:
 
             self.env.process(self._run(block))
 
+            if self.monitor.use_recording:
+                self.monitor.record(self.env.now,
+                                    block=block.name,
+                                    event="Block_Arrived")
+
             self.sent += 1
             if len(self.blocks) == self.sent:
                 break
@@ -105,7 +111,6 @@ class Bay:
                  env,
                  name=None,
                  id=None,
-                 team=None,
                  capacity_h1=None,
                  capacity_h2=None,
                  length=None,
@@ -120,7 +125,6 @@ class Bay:
         self.env = env
         self.name = name
         self.id = id
-        self.team = team
         self.capacity_h1 = capacity_h1
         self.capacity_h2 = capacity_h2
         self.length = length
@@ -133,8 +137,8 @@ class Bay:
         self.monitor = monitor
 
         self.occupied_space = 0
-        self.workload_h1 = 0
-        self.workload_h2 = 0
+        self.daily_workload_h1 = 0
+        self.daily_workload_h2 = 0
 
         self.processes = {}
         self.blocks_in_bay = {}
@@ -151,8 +155,8 @@ class Bay:
         self.blocks_in_bay[block.id] = block
 
         self.occupied_space += block.length * block.breadth
-        self.workload_h1 += block.workload_h1
-        self.workload_h2 += block.workload_h2
+        self.daily_workload_h1 += block.workload_h1 / block.duration
+        self.daily_workload_h2 += block.workload_h2 / block.duration
 
     def _work(self, block):
         # 공간 배치
@@ -171,7 +175,8 @@ class Bay:
             self.monitor.record(self.env.now,
                                 block=block.name,
                                 bay=self.name,
-                                team=self.team,
+                                x_coordinate=block.x,
+                                y_coordinate=block.y,
                                 event="Working_Started")
 
         yield self.env.timeout(block.duration)
@@ -180,7 +185,8 @@ class Bay:
             self.monitor.record(self.env.now,
                                 block=block.name,
                                 bay=self.name,
-                                team=self.team,
+                                x_coordinate=block.x,
+                                y_coordinate=block.y,
                                 event="Working_Finished")
 
         self.monitor.set_scheduling_flag(scheduling_mode="machine_scheduling")
@@ -191,46 +197,11 @@ class Bay:
         del self.allocated_blocks_polygon_dict[block.id]
 
         self.occupied_space -= block.length * block.breadth
-        self.workload_h1 -= block.workload_h1
-        self.workload_h2 -= block.workload_h2
+        self.daily_workload_h1 -= block.workload_h1 / block.duration
+        self.daily_workload_h2 -= block.workload_h2 / block.duration
 
         self.sink.put(block)
 
-    def _BLF_algorithm(self, block):
-        """
-        Bottom-Left-Fill algorithm
-        :param block:
-        :return: x, y
-        """
-        candidates = []
-
-
-        for x in self.x_list:
-            for y in self.y_list:
-                if x + block.length > self.length or y + block.breadth > self.breadth:
-                    continue  # 캔버스 범위 초과
-                poly = Polygon((Point(x, y),
-                                Point(x+block.length, y),
-                                Point(x+block.length, y+block.breadth),
-                                Point(x,y+block.breadth),
-                                Point(x,y)))
-                poly = shapely.affinity.scale(poly, xfact=0.99, yfact=0.99)
-
-                collides = False
-                for item in self.allocated_blocks_polygon_dict.values():
-                    if poly.intersects(item):
-                        collides = True
-                        break
-
-                if not collides:
-                    candidates.append((x, y))
-                    break
-
-        if not candidates:
-            raise RuntimeError("No valid placement found for the block.")
-        best = sorted(candidates, key=lambda p: np.linalg.norm(p))[0]
-
-        return best
 
 class Sink:
     def __init__(self,
@@ -250,6 +221,11 @@ class Sink:
 
         self.num_blocks_completed += 1
         self.completion_date = self.env.now
+
+        if self.monitor.use_recording:
+            self.monitor.record(self.env.now,
+                                block=block.name,
+                                event="Block_Retrieved")
 
 
 class Monitor:
@@ -273,7 +249,8 @@ class Monitor:
         self.time = []
         self.block = []
         self.bay = []
-        self.team = []
+        self.x_coordinate = []
+        self.y_coordinate = []
         self.event = []
 
     def set_scheduling_flag(self,
@@ -335,24 +312,27 @@ class Monitor:
                time,
                block=None,
                bay=None,
-               team=None,
+               x_coordinate=None,
+               y_coordinate=None,
                event=None):
 
         self.time.append(time)
         self.block.append(block)
         self.bay.append(bay)
-        self.team.append(team)
+        self.x_coordinate.append(x_coordinate)
+        self.y_coordinate.append(y_coordinate)
         self.event.append(event)
 
     def get_logs(self,
                  file_path=None):
 
-        df_log = pd.DataFrame(columns=['Time', 'Block', 'Bay', 'Team', 'Event'])
+        df_log = pd.DataFrame(columns=['Time', 'Block', 'Bay', 'X_Coord', 'Y_Coord', 'Event'])
 
         df_log['Time'] = self.time
         df_log['Block'] = self.block
         df_log['Bay'] = self.bay
-        df_log['Team'] = self.team
+        df_log['X_Coord'] = self.x_coordinate
+        df_log['Y_Coord'] = self.y_coordinate
         df_log['Event'] = self.event
 
         if file_path is not None:
