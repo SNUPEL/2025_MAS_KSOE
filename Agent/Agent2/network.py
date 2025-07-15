@@ -16,7 +16,8 @@ class BAScheduler(nn.Module):
                  num_HGT_layers,
                  num_actor_layers,
                  num_critic_layers,
-                 use_parameter_sharing=True):
+                 use_parameter_sharing=True,
+                 use_communication=True):
 
         super(BAScheduler, self).__init__()
         self.meta_data = meta_data
@@ -28,6 +29,9 @@ class BAScheduler(nn.Module):
         self.num_actor_layers = num_actor_layers
         self.num_critic_layers = num_critic_layers
         self.use_parameter_sharing = use_parameter_sharing
+        self.use_communication = use_communication
+
+        self.num_bays = self.num_nodes["bay"]
 
         self.conv = nn.ModuleList()
         for i in range(self.num_HGT_layers):
@@ -36,10 +40,18 @@ class BAScheduler(nn.Module):
             else:
                 self.conv.append(HGTConv(embed_dim, embed_dim, meta_data, heads=num_heads))
 
+        if self.use_communication:
+            self.fc = nn.ModuleList()
+            self.fc.append(nn.Linear(2, embed_dim))
+            self.fc.append(nn.Linear(embed_dim, embed_dim))
+
         self.actor = nn.ModuleList()
         for i in range(num_actor_layers):
             if i == 0:
-                self.actor.append(nn.Linear(embed_dim * 2, embed_dim))
+                if self.use_communication:
+                    self.actor.append(nn.Linear(embed_dim * 3, embed_dim))
+                else:
+                    self.actor.append(nn.Linear(embed_dim, embed_dim))
             elif 0 < i < num_actor_layers - 1:
                 self.actor.append(nn.Linear(embed_dim, embed_dim))
             else:
@@ -57,6 +69,7 @@ class BAScheduler(nn.Module):
 
     def act(self,
             graph_feature=None,
+            pairwise_feature=None,
             mask=None,
             greedy=False):
 
@@ -72,8 +85,20 @@ class BAScheduler(nn.Module):
         h_blocks_pooled = h_blocks.mean(dim=-2)
         h_bays_pooled = h_bays.mean(dim=-2)
 
-        h_blocks_pooled_padding = h_blocks_pooled.unsqueeze(-2).expand(h_bays.shape[0], -1)
-        h_actions = torch.cat((h_bays, h_blocks_pooled_padding), dim=-1)
+        # h_blocks_pooled_padding = h_blocks_pooled.unsqueeze(-2).expand(h_bays.shape[0], -1)
+        # h_actions = torch.cat((h_bays, h_blocks_pooled_padding), dim=-1)
+
+        if self.use_communication:
+            h_added = pairwise_feature.squeeze(0)
+            for i in range(self.num_HGT_layers):
+                h_added = self.fc[i](h_added)
+                h_added = F.elu(h_added)
+
+            h_blocks_padding = h_blocks.expand(self.num_bays, -1)
+            h_actions = torch.cat((h_bays, h_blocks_padding, h_added), dim=-1)
+
+        else:
+            h_actions = h_bays
 
         for i in range(self.num_actor_layers):
             if i < len(self.actor) - 1:
@@ -114,6 +139,7 @@ class BAScheduler(nn.Module):
 
     def evaluate(self,
                  batch_graph_feature=None,
+                 batch_pairwise_feature=None,
                  batch_action=None,
                  batch_mask=None):
 
@@ -130,8 +156,20 @@ class BAScheduler(nn.Module):
         h_blocks_pooled = h_blocks.mean(dim=-2)
         h_bays_pooled = h_bays.mean(dim=-2)
 
-        h_blocks_pooled_padding = h_blocks_pooled.unsqueeze(-2).expand(-1, h_bays.shape[0], -1)
-        h_actions = torch.cat((h_blocks, h_blocks_pooled_padding), dim=-1)
+        # h_blocks_pooled_padding = h_blocks_pooled.unsqueeze(-2).expand(-1, h_bays.shape[0], -1)
+        # h_actions = torch.cat((h_blocks, h_blocks_pooled_padding), dim=-1)
+
+        if self.use_communication:
+            h_added = batch_pairwise_feature.squeeze(1)
+            for i in range(self.num_HGT_layers):
+                h_added = self.fc[i](h_added)
+                h_added = F.elu(h_added)
+
+            h_blocks_padding = h_blocks.expand(-1, self.num_bays, -1)
+            h_actions = torch.cat((h_bays, h_blocks_padding, h_added), dim=-1)
+
+        else:
+            h_actions = h_bays
 
         for i in range(self.num_actor_layers):
             if i < len(self.actor) - 1:

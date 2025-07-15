@@ -16,6 +16,7 @@ class RollOutMemory:
 
         # input variables
         self.graph_features = []
+        self.pairwise_features = []
         self.masks = []
 
         # other variables
@@ -28,6 +29,7 @@ class RollOutMemory:
     def clear(self):
         # input variables
         del self.graph_features[:]
+        del self.pairwise_features[:]
         del self.masks[:]
 
         # other variables
@@ -47,6 +49,7 @@ class RollOutMemory:
 
         # input variables
         self.graph_features.append(state.graph_feature)
+        self.pairwise_features.append(state.pairwise_feature)
         self.masks.append(state.mask.unsqueeze(0))
 
         # other variables
@@ -62,6 +65,7 @@ class RollOutMemory:
         self.values.append([last_value])
 
         graph_features = Batch.from_data_list(self.graph_features).to(self.device)
+        pairwise_features = torch.concat(self.pairwise_features).to(self.device)
         masks = torch.concat(self.masks).to(self.device)
 
         actions = torch.from_numpy(np.array(self.actions)).type(torch.long).to(self.device)
@@ -70,7 +74,7 @@ class RollOutMemory:
         values = torch.from_numpy(np.array(self.values)).type(torch.float32).to(self.device)
         log_probs = torch.from_numpy(np.array(self.log_probs)).type(torch.float32).to(self.device)
 
-        return graph_features, masks, actions, rewards, values, dones, log_probs
+        return graph_features, pairwise_features, masks, actions, rewards, values, dones, log_probs
 
 
 class Agent2:
@@ -119,7 +123,8 @@ class Agent2:
                                    num_HGT_layers=num_HGT_layers,
                                    num_actor_layers=num_actor_layers,
                                    num_critic_layers=num_critic_layers,
-                                   use_parameter_sharing=use_parameter_sharing).to(device)
+                                   use_parameter_sharing=use_parameter_sharing,
+                                   use_communication=use_communication).to(device)
         self.optimizer = optim.Adam(self.network.parameters(), lr=lr)
         self.scheduler = StepLR(optimizer=self.optimizer, step_size=lr_step, gamma=lr_decay)
 
@@ -139,6 +144,7 @@ class Agent2:
         self.network.eval()
         with torch.no_grad():
             action, log_prob, value = self.network.act(graph_feature=state.graph_feature,
+                                                       pairwise_feature=state.pairwise_feature,
                                                        mask=state.mask)
         return action, log_prob, value
 
@@ -146,7 +152,8 @@ class Agent2:
               last_value):
 
         self.network.train()
-        graph_features, masks, actions, rewards, values, dones, log_probs = self.memory.get(last_value)
+        graph_features, pairwise_features, masks, actions, rewards, values, dones, log_probs \
+            = self.memory.get(last_value)
 
         avg_loss = 0.0
 
@@ -167,6 +174,7 @@ class Agent2:
 
             new_log_probs, new_values, dist_entropy \
                 = self.network.evaluate(batch_graph_feature=graph_features,
+                                        batch_pairwise_feature=pairwise_features,
                                         batch_action=actions,
                                         batch_mask=masks)
 

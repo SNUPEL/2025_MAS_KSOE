@@ -39,7 +39,7 @@ class BSScheduler(nn.Module):
         self.actor = nn.ModuleList()
         for i in range(num_actor_layers):
             if i == 0:
-                self.actor.append(nn.Linear(embed_dim * 2, embed_dim))
+                self.actor.append(nn.Linear(embed_dim, embed_dim))
             elif 0 < i < num_actor_layers - 1:
                 self.actor.append(nn.Linear(embed_dim, embed_dim))
             else:
@@ -72,8 +72,9 @@ class BSScheduler(nn.Module):
         h_blocks_pooled = h_blocks.mean(dim=-2)
         h_bays_pooled = h_bays.mean(dim=-2)
 
-        h_bays_pooled_padding = h_bays_pooled.unsqueeze(-2).expand(h_blocks.shape[0], -1)
-        h_actions = torch.cat((h_blocks, h_bays_pooled_padding), dim=-1)
+        # h_bays_pooled_padding = h_bays_pooled.unsqueeze(-2).expand(h_blocks.shape[0], -1)
+        # h_actions = torch.cat((h_blocks, h_bays_pooled_padding), dim=-1)
+        h_actions = h_blocks
 
         for i in range(self.num_actor_layers):
             if i < len(self.actor) - 1:
@@ -130,8 +131,9 @@ class BSScheduler(nn.Module):
         h_blocks_pooled = h_blocks.mean(dim=-2)
         h_bays_pooled = h_bays.mean(dim=-2)
 
-        h_bays_pooled_padding = h_bays_pooled.unsqueeze(-2).expand(-1, h_blocks.shape[0], -1)
-        h_actions = torch.cat((h_blocks, h_bays_pooled_padding), dim=-1)
+        # h_bays_pooled_padding = h_bays_pooled.unsqueeze(-2).expand(-1, h_blocks.shape[0], -1)
+        # h_actions = torch.cat((h_blocks, h_bays_pooled_padding), dim=-1)
+        h_actions = h_blocks
 
         for i in range(self.num_actor_layers):
             if i < len(self.actor) - 1:
@@ -140,7 +142,6 @@ class BSScheduler(nn.Module):
             else:
                 batch_logits = self.actor[i](h_actions).flatten(1)
 
-        batch_mask = batch_mask.transpose(1, 2).flatten(1)
         batch_logits[~batch_mask] = float('-inf')
         batch_probs = F.softmax(batch_logits, dim=1)
         batch_dist = Categorical(batch_probs)
