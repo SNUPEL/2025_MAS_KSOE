@@ -137,8 +137,8 @@ class Bay:
         self.monitor = monitor
 
         self.occupied_space = 0
-        self.workload_h1 = 0
-        self.workload_h2 = 0
+        self.daily_workload_h1 = 0
+        self.daily_workload_h2 = 0
 
         self.processes = {}
         self.blocks_in_bay = {}
@@ -155,8 +155,8 @@ class Bay:
         self.blocks_in_bay[block.id] = block
 
         self.occupied_space += block.length * block.breadth
-        self.workload_h1 += block.workload_h1
-        self.workload_h2 += block.workload_h2
+        self.daily_workload_h1 += block.workload_h1 / block.duration
+        self.daily_workload_h2 += block.workload_h2 / block.duration
 
     def _work(self, block):
         # 공간 배치
@@ -197,8 +197,8 @@ class Bay:
         del self.allocated_blocks_polygon_dict[block.id]
 
         self.occupied_space -= block.length * block.breadth
-        self.workload_h1 -= block.workload_h1
-        self.workload_h2 -= block.workload_h2
+        self.daily_workload_h1 -= block.workload_h1 / block.duration
+        self.daily_workload_h2 -= block.workload_h2 / block.duration
 
         self.sink.put(block)
 

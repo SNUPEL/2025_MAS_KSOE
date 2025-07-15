@@ -228,8 +228,10 @@ class Factory:
                 else:
                     flag_weight_constraint = (int(block_info["Weight"]) <= int(bay_info["Block_Weight"]))
 
-                flag_capacity_constraint = ((int(block_info["Workload_H01"]) <= int(bay_info["Capacity_H01"])
-                                            and (int(block_info["Workload_H02"]) <= int(bay_info["Capacity_H02"]))))
+                flag_capacity_constraint = ((int(block_info["Workload_H01"]) / int(block_info["Duration"])
+                                             <= int(bay_info["Capacity_H01"])
+                                            and (int(block_info["Workload_H02"]) / int(block_info["Duration"])
+                                                 <= int(bay_info["Capacity_H02"]))))
 
                 eligibility_matrix[int(block_info["Block_ID"]),int(bay_info["Bay_ID"])] \
                     = flag_size_constraint & flag_weight_constraint & flag_capacity_constraint
@@ -252,6 +254,7 @@ class Factory:
 
             for block in blocks:
                 process_type = block.process_type
+                duration = block.duration
                 weight = block.weight
                 length = block.length
                 breadth = block.breadth
@@ -267,8 +270,8 @@ class Factory:
                     else:
                         flag_weight_constraint = (weight <= bay.block_weight)
 
-                    flag_capacity_constraint = ((bay.workload_h1 + workload_h1 <= bay.capacity_h1)
-                                                and (bay.workload_h2 + workload_h2 <= bay.capacity_h2))
+                    flag_capacity_constraint = ((bay.daily_workload_h1 + workload_h1 / duration <= bay.capacity_h1)
+                                                and (bay.daily_workload_h2 + workload_h2 / duration <= bay.capacity_h2))
 
                     flag_space_constraint = (bay.occupied_space + (length * breadth)
                                              <= (bay.length * bay.breadth) * 0.8)
@@ -581,6 +584,7 @@ if __name__ == '__main__':
     import random
     from Agent.Agent1.heuristic import BSHeuristic
     from Agent.Agent2.heuristic import BAHeuristic
+    from Agent.Agent3.heuristic import BLHeuristic
 
     algorithm_agent1 = "SPT"
     algorithm_agent2 = "MNB"
@@ -588,6 +592,7 @@ if __name__ == '__main__':
 
     agent1 = BSHeuristic(algorithm_agent1)
     agent2 = BAHeuristic(algorithm_agent2)
+    agent3 = BLHeuristic(algorithm_agent3)
 
     # data_src = DataGenerator()
     block_data_src = "../input/block_data.xlsx"
@@ -597,7 +602,9 @@ if __name__ == '__main__':
                   agent1=algorithm_agent1,
                   agent2=algorithm_agent2,
                   agent3=algorithm_agent3,
-                  use_recording=True)
+                  use_recording=True,
+                  use_communication=True,
+                  use_spatial_arrangement=True)
 
     step = 0
     episode_reward = 0
@@ -633,7 +640,7 @@ if __name__ == '__main__':
             # action_agent2 = np.random.choice(candidates)
             # next_state_agent3, reward_agent2, done = env.step(action_agent2)
         else:
-            action_agent3 = None
+            action_agent3 = agent3.act(state_agent3)
             next_state_agent1, reward_agent3, done = env.step(action_agent3)
 
         if mode == "agent1":
