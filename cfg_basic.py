@@ -15,6 +15,14 @@ class Configure:
         self.data_params['model_for_H02'] = '../data/그룹별 H02 변수.xlsx'
         self.data_params['model_for_duration'] = '../data/그룹별 duration 변수.xlsx'
 
+        # 착수일 간격, 후버퍼 보정을 위한 확률
+        self.data_params['p_for_interval'] = 0.8952
+        self.data_params['p_for_buffer'] = 0.3886
+
+        # 샘플링되는 그룹들(데이터 수가 10개 이하인 그룹들)
+        self.data_params['group_sampling'] = ['BC_A', 'BC_S', 'PT_D', 'PT_L', 'PT_R', 'VL_A', 'VL_B', 'VL_D', 'VL_E', 'VL_F', 'VL_S']
+
+
         self.data_params['n_total'] = 6938
         self.data_params['n_episode_data'] = 50
 
