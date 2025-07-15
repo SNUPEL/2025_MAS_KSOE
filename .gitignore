@@ -195,6 +195,8 @@ cython_debug/
 
 .idea/
 *.xlsx
+!input/configurations/bay_data.xlsx
+!input/configurations/block_data.xlsx
 !data/착수일 간격_피팅완료(수정).xlsx
 !data/geometric_buffer_중조.xlsx
 !data/선종블록_공정수.xlsx

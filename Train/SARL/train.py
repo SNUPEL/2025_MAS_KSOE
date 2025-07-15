@@ -33,6 +33,11 @@ def get_config():
     parser.add_argument("--pretrained_model_path_agent2", type=str, default=None, help="agent2 model file path")
 
     parser.add_argument("--num_blocks", type=int, default=100, help="number of blocks")
+    parser.add_argument("--iat_avg", type=float, default=0.8952, help="average inter-arrival time")
+    parser.add_argument("--buffer_avg", type=float, default=0.3886, help="average buffer")
+    parser.add_argument("--bay_data_path", type=str, default="./input/configurations/bay_data.xlsx", help="bay data")
+    parser.add_argument("--block_data_path", type=str, default="./input/configurations/block_data.xlsx", help="block data")
+    parser.add_argument("--val_dir", type=str, default=None, help="directory where the validation data are stored")
 
     parser.add_argument("--algorithm_agent1", type=str, default=None, help="agent1")
     parser.add_argument("--algorithm_agent2", type=str, default=None, help="agent2")
@@ -61,9 +66,6 @@ def get_config():
     parser.add_argument("--eval_every", type=int, default=50, help="Evaluate every x episodes")
     parser.add_argument("--save_every", type=int, default=500, help="Save a model every x episodes")
     parser.add_argument("--reset_every", type=int, default=1, help="Generate new instances every x episodes")
-
-    parser.add_argument("--config_file_path", type=str, default="./input/bay_config.xlsx", help="configuration file path")
-    parser.add_argument("--val_dir", type=str, default=None, help="directory where the validation data are stored")
 
     return parser.parse_args()
 
