@@ -562,16 +562,16 @@ class Factory:
 
         for _, row in self.df_bays.iterrows():
             bay = Bay(sim_env,
-                      name=row['Bay_Name'],
-                      id=int(row['Bay_ID']),
-                      capacity_h1=float(row['Capacity_H01']),
-                      capacity_h2=float(row['Capacity_H02']),
-                      length=float(row['Bay_Length']),
-                      breadth=float(row['Bay_Breadth']),
-                      block_breadth=float(row['Block_Breadth']),
-                      block_height=float(row['Block_Height']),
-                      block_weight=float(row['Block_Weight']),
-                      block_turnover_weight=float(row['Block_T/O_Weight']),
+                      name=row['bay_name'],
+                      id=int(row['bay_id']),
+                      capacity_h1=float(row['capacity_h1']),
+                      capacity_h2=float(row['capacity_h2']),
+                      length=float(row['bay_length']),
+                      breadth=float(row['bay_breadth']),
+                      block_breadth=float(row['block_breadth']),
+                      block_height=float(row['block_height']),
+                      block_weight=float(row['block_weight']),
+                      block_turnover_weight=float(row['block_turnover_weight']),
                       sink=sink,
                       monitor=monitor)
 
