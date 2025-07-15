@@ -155,27 +155,18 @@ class Bay:
         self.workload_h2 += block.workload_h2
 
     def _work(self, block):
-        # 공간 배치 알고리즘 추후 연결
-        mode = 'BLF'
-        if mode == 'Algorithm':
-            pass
-            # self.monitor.add_to_queue(block, agent="agent3")
-            # self.monitor.set_scheduling_flag(scheduling_mode="spatial_arrangement")
-            #
-            # self.call_for_spatial_arrangement[block.id] = self.env.event()
-            # x, y = yield self.call_for_spatial_arrangement[block.id]
-            #
-            # del self.call_for_spatial_arrangement[block.id]
-        elif mode == 'BLF':
-            x, y = self._BLF_algorithm(block)
-            block.place(x, y)
-            self.allocated_blocks_polygon_dict[block.id] = block.get_polygon()
+        # 공간 배치
+        self.monitor.add_to_queue(block=block, bay=self, agent="agent3")
+        self.monitor.set_scheduling_flag(scheduling_mode="spatial_arrangement")
 
-        else:
-            pass
+        self.call_for_spatial_arrangement[block.id] = self.env.event()
+        x, y = yield self.call_for_spatial_arrangement[block.id]
+        block.place(x, y)
+        self.allocated_blocks_polygon_dict[block.id] = block.get_polygon()
 
+        del self.call_for_spatial_arrangement[block.id]
 
-
+        # 작업 시작
         if self.monitor.use_recording:
             self.monitor.record(self.env.now,
                                 block=block.name,
@@ -296,7 +287,8 @@ class Monitor:
             print("Invalid scheduling mode")
 
     def add_to_queue(self,
-                     block,
+                     block=None,
+                     bay=None,
                      agent="agent1"):
 
         if agent == "agent1":
@@ -304,7 +296,7 @@ class Monitor:
         elif agent == "agent2":
             self.queue_for_agent2 = block
         elif agent == "agent3":
-            self.queue_for_agent3 = block
+            self.queue_for_agent3 = (bay, block)
         else:
             print("Invalid agent")
 
@@ -315,6 +307,7 @@ class Monitor:
         if agent == "agent1":
             assert block_id is not None
 
+            bay = None
             block = self.queue_for_agent1[block_id]
             del self.queue_for_agent1[block_id]
             self.call_agent1 = False
@@ -323,19 +316,20 @@ class Monitor:
             self.call_agent2 = True
 
         elif agent == "agent2":
+            bay = None
             block = self.queue_for_agent2
             self.queue_for_agent2 = None
             self.call_agent2 = False
 
         elif agent == "agent3":
-            block = self.queue_for_agent3
+            bay, block = self.queue_for_agent3
             self.queue_for_agent3 = None
             self.call_agent3= False
 
         else:
             print("Invalid scheduling mode")
 
-        return block
+        return bay, block
 
     def record(self,
                time,

@@ -13,4 +13,4 @@ class BLHeuristic:
         candidates = np.where(priority_idx == np.max(priority_idx))[0]
         action = np.random.choice(candidates)
 
-        return int(action)
+        return int(action[0]), int(action[1])

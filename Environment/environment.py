@@ -3,6 +3,7 @@ import simpy
 import numpy as np
 import pandas as pd
 
+from shapely.geometry import Point, Polygon
 from torch_geometric.data import HeteroData
 from Environment.data import DataGenerator
 from Environment.simulation import *
@@ -43,7 +44,8 @@ class Factory:
                  agent2='RL',
                  agent3='NFP',
                  use_recording=False,
-                 use_communication=True):
+                 use_communication=True,
+                 use_spatial_arrangement=False):
 
         self.block_data_src = block_data_src
         self.bay_data_src = bay_data_src
@@ -53,6 +55,7 @@ class Factory:
         self.agent3 = agent3
         self.use_recording = use_recording
         self.use_communication = use_communication
+        self.use_spatial_arrangement = use_spatial_arrangement
 
         if type(block_data_src) is DataGenerator:
             self.df_blocks = block_data_src.generate()
@@ -110,7 +113,7 @@ class Factory:
     def step(self, action):
         if self.agent_mode == "agent1":
             block_id = action
-            block = self.monitor.remove_from_queue(block_id, agent="agent1")
+            _, block = self.monitor.remove_from_queue(block_id, agent="agent1")
 
             if self.monitor.use_recording:
                 self.monitor.record(self.sim_env.now,
@@ -121,7 +124,7 @@ class Factory:
 
         elif self.agent_mode == "agent2":
             bay_id = action
-            block = self.monitor.remove_from_queue(agent="agent2")
+            _, block = self.monitor.remove_from_queue(agent="agent2")
             bay = self.bays[bay_id]
 
             self.source.call_for_machine_scheduling[block.id].succeed(bay.id)
@@ -135,7 +138,17 @@ class Factory:
             self.agent_mode = "agent3"
 
         else:
-            # 공간 배치 알고리즘 추후 연결
+            if self.use_spatial_arrangement:
+                x, y = action
+                bay, block = self.monitor.remove_from_queue(agent="agent3")
+
+                bay.call_for_spatial_arrangement[block.id].succeed((x, y))
+
+                if self.monitor.use_recording:
+                    self.monitor.record(self.sim_env.now,
+                                        block=block.name,
+                                        bay=bay.name,
+                                        event="Block_Located")
 
             self.agent_mode = "agent1"
 
@@ -221,46 +234,79 @@ class Factory:
         return eligibility_matrix
 
     def _get_mask(self):
-        num_rows = self.num_bays
-        num_columns = self.num_blocks
+        if self.agent_mode == "agent1" or self.agent_mode == "agent2":
+            num_rows = self.num_bays
+            num_columns = self.num_blocks
 
-        mask = np.zeros((num_rows, num_columns), dtype=bool)
+            mask = np.zeros((num_rows, num_columns), dtype=bool)
 
-        if self.agent_mode == "agent1":
-            blocks = [block for block in self.monitor.queue_for_agent1.values()]
-            axis = 0
-        elif self.agent_mode == "agent2":
-            blocks = [self.monitor.queue_for_agent2]
-            axis = 1
+            if self.agent_mode == "agent1":
+                blocks = [block for block in self.monitor.queue_for_agent1.values()]
+                axis = 0
+            elif self.agent_mode == "agent2":
+                blocks = [self.monitor.queue_for_agent2]
+                axis = 1
+
+            for block in blocks:
+                process_type = block.process_type
+                weight = block.weight
+                length = block.length
+                breadth = block.breadth
+                height = block.height
+                workload_h1 = block.workload_h1
+                workload_h2 = block.workload_h2
+
+                for bay in self.bays.values():
+                    flag_size_constraint = (breadth <= bay.block_breadth) and (height <= bay.block_height)
+
+                    if process_type == "Final조립":
+                        flag_weight_constraint = (weight <= bay.block_turnover_weight)
+                    else:
+                        flag_weight_constraint = (weight <= bay.block_weight)
+
+                    flag_capacity_constraint = ((bay.workload_h1 + workload_h1 <= bay.capacity_h1)
+                                                and (bay.workload_h2 + workload_h2 <= bay.capacity_h2))
+
+                    flag_space_constraint = (bay.occupied_space + (length * breadth)
+                                             <= (bay.length * bay.breadth) * 0.8)
+
+                    mask[bay.id, block.id] = (flag_size_constraint & flag_weight_constraint
+                                              & flag_capacity_constraint & flag_space_constraint)
+
+            mask = torch.tensor(np.any(mask, axis=axis), dtype=torch.bool).to(self.device)
+
+        elif self.agent_mode == "agent3":
+            target_bay, target_block = self.monitor.queue_for_agent3
+
+            num_rows = len(target_bay.x_list)
+            num_columns = len(target_bay.y_list)
+
+            mask = np.zeros((num_rows, num_columns), dtype=bool)
+
+            for i, x in enumerate(target_bay.x_list):
+                for j, y in enumerate(target_bay.y_list):
+                    if (x + target_block.length > target_bay.length
+                            or y + target_block.breadth > target_bay.breadth):
+                        continue  # 캔버스 범위 초과
+
+                    poly = Polygon((Point(x, y),
+                                    Point(x + target_block.length, y),
+                                    Point(x + target_block.length, y + target_block.breadth),
+                                    Point(x, y + target_block.breadth),
+                                    Point(x, y)))
+
+                    poly = shapely.affinity.scale(poly, xfact=0.99, yfact=0.99)
+
+                    flag_collide = False
+                    for item in target_bay.allocated_blocks_polygon_dict.values():
+                        if poly.intersects(item):
+                            flag_collide = True
+                            break
+
+                    mask[i, j] = flag_collide
+
         else:
             raise Exception("Invalid agent mode")
-
-        for block in blocks:
-            process_type = block.process_type
-            weight = block.weight
-            length = block.length
-            breadth = block.breadth
-            height = block.height
-            workload_h1 = block.workload_h1
-            workload_h2 = block.workload_h2
-
-            for bay in self.bays.values():
-                flag_size_constraint = (breadth <= bay.block_breadth) and (height <= bay.block_height)
-
-                if process_type == "Final조립":
-                    flag_weight_constraint = (weight <= bay.block_turnover_weight)
-                else:
-                    flag_weight_constraint = (weight <= bay.block_weight)
-
-                flag_capacity_constraint = ((bay.workload_h1 + workload_h1 <= bay.capacity_h1)
-                                            and (bay.workload_h2 + workload_h2 <= bay.capacity_h2))
-
-                flag_area_constraint = (bay.occupied_area + (length * breadth) <= (bay.length * bay.breadth) * 0.8)
-
-                mask[bay.id, block.id] = (flag_size_constraint & flag_weight_constraint
-                                          & flag_capacity_constraint & flag_area_constraint)
-
-        mask = torch.tensor(np.any(mask, axis=axis), dtype=torch.bool).to(self.device)
 
         return mask
 
@@ -405,15 +451,28 @@ class Factory:
                         priority_idx[bay.id] = 1
 
         elif self.agent_mode == "agent3":
-            # no-fit polygon (NFP)
-            if self.agent3 == "NFP":
-                pass
-            # bottom left fill (BLF)
-            elif self.agent3 == "BLF":
-                pass
-            # random (RAND)
-            else:
-                pass
+            if self.use_spatial_arrangement:
+                target_bay, target_block = self.monitor.queue_for_agent3
+                priority_idx = np.zeros((len(target_bay.x_list), len(target_bay.y_list)))
+
+                # no-fit polygon (NFP)
+                if self.agent3 == "NFP":
+                    pass
+                # minimum distance to origin (MDO)
+                elif self.agent3 == "MDO":
+                    for i, x in enumerate(target_bay.x_list):
+                        for j, y in enumerate(target_bay.y_list):
+                            priority_idx[i, j] = 1 / np.sqrt(x ** 2 + y ** 2) if np.sqrt(x ** 2 + y ** 2) != 0 else 1
+                # bottom left fill (BLF)
+                elif self.agent3 == "BLF":
+                    for i, x in enumerate(target_bay.x_list):
+                        for j, y in enumerate(target_bay.y_list):
+                            priority_idx[i, j] = 1 / (100 * y + x) if 100 * y + x != 0 else 1
+                # random (RAND)
+                else:
+                    for i, x in enumerate(target_bay.x_list):
+                        for j, y in enumerate(target_bay.y_list):
+                            priority_idx[i, j] = 1
         else:
             raise Exception("Invalid agent_mode")
 
@@ -440,13 +499,23 @@ class Factory:
                 state.update(priority_idx=priority_idx,
                              mask=mask)
 
+        elif self.agent_mode == "agent3":
+            if self.use_spatial_arrangement:
+                state = State(self.agent3)
+                mask = self._get_mask()
+
+                state.update(priority_idx=priority_idx,
+                             mask=mask)
+            else:
+                state = None
+
         else:
-            state = None
+            raise Exception("Invalid agent_mode")
 
         return state
 
     def _calculate_reward(self):
-        pass
+        return 0.0
 
     def _build_model(self):
         sim_env = simpy.Environment()
