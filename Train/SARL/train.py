@@ -11,6 +11,7 @@ from Environment.environment import Factory
 from Environment.data import DataGenerator
 from Agent.Agent1.heuristic import BSHeuristic
 from Agent.Agent2.heuristic import BAHeuristic
+from Agent.Agent3.heuristic import BLHeuristic
 from Agent.Agent1.ppo import Agent1
 from Agent.Agent2.ppo import Agent2
 from Train.SARL.validate import evaluate
@@ -23,6 +24,7 @@ def get_config():
     parser.add_argument('--no_cuda', action='store_true', help='Disable CUDA')
     parser.add_argument('--no_record', action='store_true', help="Disable Recording events")
     parser.add_argument('--no_communication', action='store_true', help="Disable communication")
+    parser.add_argument('--no_spatial_arrangement', action='store_true', help="Disable spatial arrangement")
 
     parser.add_argument("--seed", type=int, default=42, help="random seed")
 
@@ -77,6 +79,7 @@ def train(config):
     use_saved_model = False if config.no_pretraining else True
     use_recording = False if config.no_record else True
     use_communication = False if config.no_communication else True
+    use_spatial_arrangement = False if config.no_spatial_arrangement else True
 
     if use_cuda:
         device = torch.device("cuda:0")
@@ -146,7 +149,8 @@ def train(config):
                   agent2=algorithm_agent2,
                   agent3=algorithm_agent3,
                   use_recording=use_recording,
-                  use_communication=use_communication)
+                  use_communication=use_communication,
+                  use_spatial_arrangement=use_spatial_arrangement)
 
     if algorithm_agent1 == "RL":
         agent1 = Agent1(meta_data=env.meta_data_agent1,
@@ -200,8 +204,10 @@ def train(config):
     else:
         agent2 = BAHeuristic(algorithm_agent2)
 
-    # 추후 공간 배치 에이전트 추가 예정
-    agent3 = None
+    if use_spatial_arrangement:
+        agent3 = BLHeuristic(algorithm_agent3)
+    else:
+        agent3 = None
 
     if not use_vessl:
         writer = SummaryWriter(log_dir)
@@ -273,8 +279,11 @@ def train(config):
                 next_state_agent3, reward_agent2, done = env.step(action_agent2)
                 episode_reward += reward_agent2
             elif mode == "agent3":
-                # 추후 공간 배치 에이전트 추가 예정
-                action_agent3 = None
+                if use_spatial_arrangement:
+                    action_agent3 = agent3.act(state_agent3)
+                else:
+                    action_agent3 = None
+
                 next_state_agent1, reward_agent3, done = env.step(action_agent3)
 
             if mode == "agent1":
@@ -372,7 +381,8 @@ def train(config):
                           agent2=algorithm_agent2,
                           agent3=algorithm_agent3,
                           use_recording=use_recording,
-                          use_communication=use_communication)
+                          use_communication=use_communication,
+                          use_spatial_arrangement=use_spatial_arrangement)
 
     if not use_vessl:
         writer.close()
