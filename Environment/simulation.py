@@ -1,5 +1,7 @@
 import pandas as pd
-
+import numpy as np
+import shapely
+from shapely.geometry import Point, Polygon
 
 class Block:
     def __init__(self,
@@ -32,6 +34,21 @@ class Block:
         self.workload_h2 = workload_h2
 
         self.allocated_bay = None
+        self.x = None
+        self.y = None
+
+    def place(self, x, y):
+        self.x = x
+        self.y = y
+
+    def get_polygon(self):
+        return Polygon([
+            (self.x, self.y),
+            (self.x + self.length, self.y),
+            (self.x + self.length, self.y + self.breadth),
+            (self.x, self.y + self.breadth),
+            (self.x, self.y)
+        ])
 
 
 class Source:
@@ -123,6 +140,10 @@ class Bay:
         self.blocks_in_bay = {}
         self.call_for_spatial_arrangement = {}
 
+        self.x_list = np.arange(0, self.length, 1)
+        self.y_list = np.arange(0, self.breadth, 1)
+        self.allocated_blocks_polygon_dict = {}
+
     def put(self, block):
         self.monitor.blocks_working[block.id] = block
 
@@ -135,13 +156,25 @@ class Bay:
 
     def _work(self, block):
         # 공간 배치 알고리즘 추후 연결
-        # self.monitor.add_to_queue(block, agent="agent3")
-        # self.monitor.set_scheduling_flag(scheduling_mode="spatial_arrangement")
-        #
-        # self.call_for_spatial_arrangement[block.id] = self.env.event()
-        # x, y = yield self.call_for_spatial_arrangement[block.id]
-        #
-        # del self.call_for_spatial_arrangement[block.id]
+        mode = 'BLF'
+        if mode == 'Algorithm':
+            pass
+            # self.monitor.add_to_queue(block, agent="agent3")
+            # self.monitor.set_scheduling_flag(scheduling_mode="spatial_arrangement")
+            #
+            # self.call_for_spatial_arrangement[block.id] = self.env.event()
+            # x, y = yield self.call_for_spatial_arrangement[block.id]
+            #
+            # del self.call_for_spatial_arrangement[block.id]
+        elif mode == 'BLF':
+            x, y = self._BLF_algorithm(block)
+            block.place(x, y)
+            self.allocated_blocks_polygon_dict[block.id] = block.get_polygon()
+
+        else:
+            pass
+
+
 
         if self.monitor.use_recording:
             self.monitor.record(self.env.now,
@@ -164,6 +197,7 @@ class Bay:
         del self.monitor.blocks_working[block.id]
         del self.processes[block.id]
         del self.blocks_in_bay[block.id]
+        del self.allocated_blocks_polygon_dict[block.id]
 
         self.occupied_space -= block.length * block.breadth
         self.workload_h1 -= block.workload_h1
@@ -171,6 +205,41 @@ class Bay:
 
         self.sink.put(block)
 
+    def _BLF_algorithm(self, block):
+        """
+        Bottom-Left-Fill algorithm
+        :param block:
+        :return: x, y
+        """
+        candidates = []
+
+
+        for x in self.x_list:
+            for y in self.y_list:
+                if x + block.length > self.length or y + block.breadth > self.breadth:
+                    continue  # 캔버스 범위 초과
+                poly = Polygon((Point(x, y),
+                                Point(x+block.length, y),
+                                Point(x+block.length, y+block.breadth),
+                                Point(x,y+block.breadth),
+                                Point(x,y)))
+                poly = shapely.affinity.scale(poly, xfact=0.99, yfact=0.99)
+
+                collides = False
+                for item in self.allocated_blocks_polygon_dict.values():
+                    if poly.intersects(item):
+                        collides = True
+                        break
+
+                if not collides:
+                    candidates.append((x, y))
+                    break
+
+        if not candidates:
+            raise RuntimeError("No valid placement found for the block.")
+        best = sorted(candidates, key=lambda p: np.linalg.norm(p))[0]
+
+        return best
 
 class Sink:
     def __init__(self,
