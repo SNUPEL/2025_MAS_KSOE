@@ -303,7 +303,9 @@ class Factory:
                             flag_collide = True
                             break
 
-                    mask[i, j] = flag_collide
+                    mask[i, j] = not flag_collide
+
+            mask = torch.tensor(mask, dtype=torch.bool).to(self.device)
 
         else:
             raise Exception("Invalid agent mode")

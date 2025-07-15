@@ -10,7 +10,8 @@ class BLHeuristic:
         mask = state.mask.cpu().numpy()
         priority_idx[~mask] = 0.0
 
-        candidates = np.where(priority_idx == np.max(priority_idx))[0]
-        action = np.random.choice(candidates)
+        candidates = np.where(priority_idx == np.max(priority_idx))
+        idx = np.random.choice(len(candidates[0]))
+        action = (candidates[0][idx], candidates[1][idx])
 
-        return int(action[0]), int(action[1])
+        return action
