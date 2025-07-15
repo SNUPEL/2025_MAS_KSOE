@@ -3,6 +3,7 @@ import numpy as np
 import shapely
 from shapely.geometry import Point, Polygon
 
+
 class Block:
     def __init__(self,
                  name=None,
@@ -196,41 +197,6 @@ class Bay:
 
         self.sink.put(block)
 
-    def _BLF_algorithm(self, block):
-        """
-        Bottom-Left-Fill algorithm
-        :param block:
-        :return: x, y
-        """
-        candidates = []
-
-
-        for x in self.x_list:
-            for y in self.y_list:
-                if x + block.length > self.length or y + block.breadth > self.breadth:
-                    continue  # 캔버스 범위 초과
-                poly = Polygon((Point(x, y),
-                                Point(x+block.length, y),
-                                Point(x+block.length, y+block.breadth),
-                                Point(x,y+block.breadth),
-                                Point(x,y)))
-                poly = shapely.affinity.scale(poly, xfact=0.99, yfact=0.99)
-
-                collides = False
-                for item in self.allocated_blocks_polygon_dict.values():
-                    if poly.intersects(item):
-                        collides = True
-                        break
-
-                if not collides:
-                    candidates.append((x, y))
-                    break
-
-        if not candidates:
-            raise RuntimeError("No valid placement found for the block.")
-        best = sorted(candidates, key=lambda p: np.linalg.norm(p))[0]
-
-        return best
 
 class Sink:
     def __init__(self,
