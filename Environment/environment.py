@@ -89,6 +89,7 @@ class Factory:
         if agent2 == "RL":
             self.block_feature_dim_agent2 = 8
             self.bay_feature_dim_agent2 = 8
+            self.pairwise_feature_dim = 2
 
             self.meta_data_agent2 = (
                 ["block", "bay",],
@@ -270,6 +271,9 @@ class Factory:
                 edge_block_to_block = [[], []]
                 edge_block_to_bay, edge_bay_to_block = [[], []], [[], []]
 
+                # node feature 추가
+
+
                 # block 노드와 bay 노드 간 엣지 구성
                 for _, block_info in self.df_blocks.iterrows():
                     for _, bay_info in self.df_bays.iterrows():
@@ -329,6 +333,15 @@ class Factory:
                 # 노드 특성 벡터 생성
                 block_feature = np.zeros((self.num_blocks, self.block_feature_dim_agent2))
                 bay_feature = np.zeros((self.num_bays, self.bay_feature_dim_agent2))
+                # 노드 조합 특성 벡터 생성
+                pairwise_feature = np.zeros((self.num_blocks,
+                                             self.num_bays,
+                                             self.pairwise_feature_dim))
+
+                # node feature 추가
+
+                # pairwise feature 추가
+
 
                 # 그래프 내 노드 간 엣지 모델링
                 edge_bay_to_bay = [[], []]
@@ -417,6 +430,7 @@ class Factory:
 
             if self.agent2 == "RL":
                 state.update(graph_feature=graph_feature,
+                             pairwise_feature=pairwise_feature,
                              mask=mask)
             else:
                 state.update(priority_idx=priority_idx,
