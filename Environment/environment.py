@@ -103,7 +103,7 @@ class Factory:
             }
 
             self.num_nodes_agent2 = {
-                "block": self.num_blocks,
+                "block": 1,
                 "bay": self.num_bays
             }
 
@@ -238,6 +238,7 @@ class Factory:
         for block in blocks:
             process_type = block.process_type
             weight = block.weight
+            length = block.length
             breadth = block.breadth
             height = block.height
             workload_h1 = block.workload_h1
@@ -254,7 +255,10 @@ class Factory:
                 flag_capacity_constraint = ((bay.workload_h1 + workload_h1 <= bay.capacity_h1)
                                             and (bay.workload_h2 + workload_h2 <= bay.capacity_h2))
 
-                mask[bay.id, block.id] = flag_size_constraint & flag_weight_constraint & flag_capacity_constraint
+                flag_area_constraint = (bay.occupied_area + (length * breadth) <= (bay.length * bay.breadth) * 0.8)
+
+                mask[bay.id, block.id] = (flag_size_constraint & flag_weight_constraint
+                                          & flag_capacity_constraint & flag_area_constraint)
 
         mask = torch.tensor(np.any(mask, axis=axis), dtype=torch.bool).to(self.device)
 
@@ -331,12 +335,10 @@ class Factory:
         elif self.agent_mode == "agent2":
             if self.agent2 == "RL":
                 # 노드 특성 벡터 생성
-                block_feature = np.zeros((self.num_blocks, self.block_feature_dim_agent2))
+                block_feature = np.zeros((1, self.block_feature_dim_agent2))
                 bay_feature = np.zeros((self.num_bays, self.bay_feature_dim_agent2))
                 # 노드 조합 특성 벡터 생성
-                pairwise_feature = np.zeros((self.num_blocks,
-                                             self.num_bays,
-                                             self.pairwise_feature_dim))
+                pairwise_feature = np.zeros((1, self.num_bays, self.pairwise_feature_dim))
 
                 # node feature 추가
 
@@ -348,13 +350,13 @@ class Factory:
                 edge_block_to_bay, edge_bay_to_block = [[], []], [[], []]
 
                 # block 노드와 bay 노드 간 엣지 구성
-                for _, block_info in self.df_blocks.iterrows():
-                    for _, bay_info in self.df_bays.iterrows():
-                        if self.eligibility_matrix[int(block_info["Block_ID"]), int(bay_info["Bay_ID"])]:
-                            edge_block_to_bay[0].append(int(block_info["Block_ID"]))
-                            edge_block_to_bay[1].append(int(bay_info["Bay_ID"]))
-                            edge_bay_to_block[0].append(int(bay_info["Bay_ID"]))
-                            edge_bay_to_block[1].append(int(block_info["Block_ID"]))
+                target_block = self.monitor.queue_for_agent2
+                for _, bay_info in self.df_bays.iterrows():
+                    if self.eligibility_matrix[target_block.id, int(bay_info["Bay_ID"])]:
+                        edge_block_to_bay[0].append(0)
+                        edge_block_to_bay[1].append(int(bay_info["Bay_ID"]))
+                        edge_bay_to_block[0].append(int(bay_info["Bay_ID"]))
+                        edge_bay_to_block[1].append(0)
 
                 # bay 노드 간 엣지 구성
                 for bay_from in self.bays.values():
@@ -375,6 +377,8 @@ class Factory:
                 graph_feature["bay", "bay_to_bay", "bay"].edge_index = edge_bay_to_bay
                 graph_feature["block", "block_to_bay", "bay"].edge_index = edge_block_to_bay
                 graph_feature["bay", "bay_to_block", "block"].edge_index = edge_bay_to_block
+
+                pairwise_feature = torch.from_numpy(pairwise_feature).type(torch.float32).to(self.device)
 
             else:
                 priority_idx = np.zeros(self.num_bays)
