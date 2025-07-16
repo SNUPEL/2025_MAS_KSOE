@@ -1,4 +1,5 @@
 import os
+import time
 import json
 import torch
 import argparse
@@ -28,13 +29,16 @@ def get_config():
 
     parser.add_argument("--seed", type=int, default=42, help="random seed")
 
-    parser.add_argument("--no_pretraining", action='store_true', help="Disable model loading")
+    parser.add_argument("--use_pretraining", action='store_true', help="Load the pre-trained models")
     parser.add_argument("--pretrained_model_path_agent1", type=str, default=None, help="agent1 model file path")
     parser.add_argument("--pretrained_model_path_agent2", type=str, default=None, help="agent2 model file path")
 
     parser.add_argument("--num_blocks", type=int, default=100, help="number of blocks")
-    parser.add_argument("--iat_avg", type=float, default=0.8952, help="average inter-arrival time")
-    parser.add_argument("--buffer_avg", type=float, default=0.3886, help="average buffer")
+    parser.add_argument("--time_horizon", type=int, default=30, help="time horizon")
+    parser.add_argument("--use_fixed_time_horizon", action='store_true', help="Fix the time horizon")
+    parser.add_argument("--iat_avg", type=float, default=0.1, help="average inter-arrival time")
+    parser.add_argument("--buffer_avg", type=float, default=1.5, help="average buffer")
+    parser.add_argument("--weight_factor", type=float, default=0.7, help="weight factor")
     parser.add_argument("--bay_data_path", type=str, default="./input/configurations/bay_data.xlsx", help="bay data")
     parser.add_argument("--block_data_path", type=str, default="./input/configurations/block_data.xlsx", help="block data")
     parser.add_argument("--val_dir", type=str, default=None, help="directory where the validation data are stored")
@@ -61,7 +65,7 @@ def get_config():
     parser.add_argument("--P_coeff", type=float, default=1, help="coefficient for policy loss")
     parser.add_argument("--V_coeff", type=float, default=0.5, help="coefficient for value loss")
     parser.add_argument("--E_coeff", type=float, default=0.01, help="coefficient for entropy loss")
-    parser.add_argument('--no_value_clipping', action='store_true', help="Disable value clipping")
+    parser.add_argument('--use_value_clipping', action='store_true', help="Use value clipping")
 
     parser.add_argument("--eval_every", type=int, default=50, help="Evaluate every x episodes")
     parser.add_argument("--save_every", type=int, default=500, help="Save a model every x episodes")
@@ -78,7 +82,7 @@ def train(config):
 
     use_cuda = torch.cuda.is_available() and not config.no_cuda
     use_vessl = False if config.no_vessl else True
-    use_saved_model = False if config.no_pretraining else True
+    use_saved_model = True if config.use_pretraining else False
     use_recording = False if config.no_record else True
     use_communication = False if config.no_communication else True
     use_spatial_arrangement = False if config.no_spatial_arrangement else True
@@ -95,7 +99,14 @@ def train(config):
     pretrained_model_path_agent1 = config.pretrained_model_path_agent1
     pretrained_model_path_agent2 = config.pretrained_model_path_agent2
 
+    use_fixed_time_horizon = True if config.use_fixed_time_horizon else False
     num_blocks = config.num_blocks
+    time_horizon = config.time_horizon
+    iat_avg = config.iat_avg
+    buffer_avg = config.buffer_avg
+    weight_factor = config.weight_factor
+    bay_data_path = config.bay_data_path
+    block_data_path = config.block_data_path
 
     algorithm_agent1 = config.algorithm_agent1
     algorithm_agent2 = config.algorithm_agent2
@@ -121,7 +132,7 @@ def train(config):
     P_coeff = config.P_coeff
     V_coeff = config.V_coeff
     E_coeff = config.E_coeff
-    use_value_clipping = False if config.no_value_clipping else True
+    use_value_clipping = True if config.use_value_clipping else False
 
     eval_every = config.eval_every
     save_every = config.save_every
@@ -129,8 +140,14 @@ def train(config):
 
     val_dir = config.val_dir
 
-    model_dir = './output/train/SARL/%s-%s-%s/model/' % (algorithm_agent1, algorithm_agent2, algorithm_agent3)
-    log_dir = './output/train/SARL/%s-%s-%s/log/' % (algorithm_agent1, algorithm_agent2, algorithm_agent3)
+    config.ymd = time.strftime('%Y%m%d')
+    config.hour = str(time.localtime().tm_hour)
+    config.minute = str(time.localtime().tm_min)
+    config.second = str(time.localtime().tm_sec)
+
+    file_dir = './output/train/SARL/%s-%s-%s/' % (algorithm_agent1, algorithm_agent2, algorithm_agent3)
+    model_dir = file_dir + '/%s_%sh_%sm_%ss/model/' % (config.ymd, config.hour, config.minute, config.second)
+    log_dir = file_dir + '/%s_%sh_%sm_%ss/log/' % (config.ymd, config.hour, config.minute, config.second)
 
     if not os.path.exists(model_dir):
         os.makedirs(model_dir)
@@ -141,11 +158,25 @@ def train(config):
     with open(log_dir + "parameters.json", 'w') as f:
         json.dump(vars(config), f, indent=4)
 
-    block_data_src = DataGenerator(num_blocks=num_blocks)
-    bay_data_src = config.config_file_path
+    if use_fixed_time_horizon:
+        block_data_src = DataGenerator(
+            block_data_path,
+            time_horizon=time_horizon,
+            iat_avg=iat_avg,
+            buffer_avg=buffer_avg,
+            weight_factor=weight_factor,
+            fix_time_horizon=True)
+    else:
+        block_data_src = DataGenerator(
+            block_data_path,
+            num_blocks=num_blocks,
+            iat_avg=iat_avg,
+            buffer_avg=buffer_avg,
+            weight_factor=weight_factor,
+            fix_time_horizon=False)
 
     env = Factory(block_data_src,
-                  bay_data_src,
+                  bay_data_path,
                   device=device,
                   agent1=algorithm_agent1,
                   agent2=algorithm_agent2,
@@ -377,7 +408,7 @@ def train(config):
 
         if e % reset_every == 0:
             env = Factory(block_data_src,
-                          bay_data_src,
+                          bay_data_path,
                           device=device,
                           agent1=algorithm_agent1,
                           agent2=algorithm_agent2,
