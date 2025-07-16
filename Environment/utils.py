@@ -117,26 +117,28 @@ def load_analysis(file_path, graph=False):
     finish = df_blocks["finish_date"].max()
 
     timeline = np.arange(start, finish)
-    load_block_num = np.zeros(finish - start)
+    load_block = np.zeros(finish - start)
+    load_area = np.zeros(finish - start)
     load_workload_h1 = np.zeros(finish - start)
     load_workload_h2 = np.zeros(finish - start)
 
     for i, row in df_blocks.iterrows():
-        load_block_num[int(row["start_date"]):int(row["finish_date"])] += 1
+        load_block[int(row["start_date"]):int(row["finish_date"])] += 1
+        load_area[int(row["start_date"]):int(row["finish_date"])] += int(row["length"]) * int(row["breadth"])
         load_workload_h1[int(row["start_date"]):int(row["finish_date"])] += int(row["workload_h1"]) / int(row["duration"])
         load_workload_h2[int(row["start_date"]):int(row["finish_date"])] += int(row["workload_h2"]) / int(row["duration"])
 
     if graph:
         fig, ax = plt.subplots(1, figsize=(16, 6))
-        ax.plot(timeline, load_block_num)
+        ax.plot(timeline, load_block)
         plt.show()
         plt.close()
 
-    return np.max(load_block_num), np.max(load_workload_h1), np.max(load_workload_h2)
+    return np.max(load_block), np.max(load_area), np.max(load_workload_h1), np.max(load_workload_h2)
 
 
 if __name__ == "__main__":
     # main()
     file_path = "../input/validation/instance-1.xlsx"
-    block_num_max, workload_h1_max, workload_h2_max = load_analysis(file_path, graph=True)
-    print(block_num_max, workload_h1_max, workload_h2_max)
+    block_max, area_max, workload_h1_max, workload_h2_max = load_analysis(file_path, graph=True)
+    print(block_max, area_max, workload_h1_max, workload_h2_max)
