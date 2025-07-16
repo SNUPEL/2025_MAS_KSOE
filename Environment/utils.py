@@ -1,10 +1,12 @@
 # blf_test_script.py
-
-import matplotlib.pyplot as plt
-from shapely.geometry import Polygon, Point
-import shapely
 import math
 import random
+import shapely
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+
+from shapely.geometry import Polygon, Point
 
 
 class MiniBlock:
@@ -107,5 +109,36 @@ def main():
     visualize_blocks(blocks, canvas_width=100, canvas_height=100)
 
 
+def load_analysis(file_path, graph=False):
+    df_blocks = pd.read_excel(file_path, sheet_name='blocks', engine='openpyxl')
+    df_blocks["finish_date"] = df_blocks["start_date"] + df_blocks["duration"] - 1
+
+    start = df_blocks["start_date"].min()
+    finish = df_blocks["finish_date"].max()
+
+    timeline = np.arange(start, finish)
+    load_block = np.zeros(finish - start)
+    load_area = np.zeros(finish - start)
+    load_workload_h1 = np.zeros(finish - start)
+    load_workload_h2 = np.zeros(finish - start)
+
+    for i, row in df_blocks.iterrows():
+        load_block[int(row["start_date"]):int(row["finish_date"])] += 1
+        load_area[int(row["start_date"]):int(row["finish_date"])] += int(row["length"]) * int(row["breadth"])
+        load_workload_h1[int(row["start_date"]):int(row["finish_date"])] += int(row["workload_h1"]) / int(row["duration"])
+        load_workload_h2[int(row["start_date"]):int(row["finish_date"])] += int(row["workload_h2"]) / int(row["duration"])
+
+    if graph:
+        fig, ax = plt.subplots(1, figsize=(16, 6))
+        ax.plot(timeline, load_block)
+        plt.show()
+        plt.close()
+
+    return np.max(load_block), np.max(load_area), np.max(load_workload_h1), np.max(load_workload_h2)
+
+
 if __name__ == "__main__":
-    main()
+    # main()
+    file_path = "../input/validation/instance-1.xlsx"
+    block_max, area_max, workload_h1_max, workload_h2_max = load_analysis(file_path, graph=True)
+    print(block_max, area_max, workload_h1_max, workload_h2_max)

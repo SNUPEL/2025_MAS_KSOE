@@ -8,15 +8,19 @@ class DataGenerator:
     def __init__(self,
                  block_data_path,
                  num_blocks=50,
-                 iat_avg=0.8952,
-                 buffer_avg=0.3886,
-                 weight_factor=0.7):
+                 time_horizon=30,
+                 iat_avg=0.1,
+                 buffer_avg=0.4,
+                 weight_factor=0.7,
+                 fix_time_horizon=False):
 
         self.block_data_path = block_data_path
         self.num_blocks = num_blocks
+        self.time_horizon = time_horizon
         self.iat_avg = iat_avg
         self.buffer_avg = buffer_avg
         self.weight_factor = weight_factor
+        self.fix_time_horizon = fix_time_horizon
 
         self.df_count = pd.read_excel(block_data_path, sheet_name="count", engine="openpyxl") # 그룹 개수에 대한 데이터프레임
         self.df_length = pd.read_excel(block_data_path, sheet_name="length", engine="openpyxl")  # 그룹 별 블록 길이 분포에 대한 데이터프레임
@@ -193,7 +197,8 @@ class DataGenerator:
         if process_type == 'Final조립':
             buffer = 2
         else:
-            buffer = stats.geom.rvs(self.buffer_avg, loc=-1)
+            p = 1 / (1 + self.buffer_avg)
+            buffer = stats.geom.rvs(p) - 1
 
         return buffer
 
@@ -204,18 +209,37 @@ class DataGenerator:
 
         df_blocks = []
 
-        for j in range(self.num_blocks):
-            name = "J-%d" % j
-            id = j
+        num_blocks = 0
+        start_date = 0
+
+        while True:
+            if self.fix_time_horizon:
+                if start_date >= self.time_horizon:
+                    flag = True
+                    del df_blocks[-1]
+                else:
+                    flag = False
+            else:
+                if num_blocks == self.num_blocks:
+                    flag = True
+                else:
+                    flag = False
+
+            if flag:
+                break
+
+            name = "J-%d" % num_blocks
+            id = num_blocks
 
             # 데이터 생성
             group_code, ship_type, block_type = self.generate_group()
             process_type = self.generate_process(group_code)
 
-            if j == 0:
+            if num_blocks == 0:
                 start_date = 0  # 첫번째 착수일은 0으로 고정
             else:
-                start_date += stats.geom.rvs(self.iat_avg, loc=-1)  # 이전 착수일에 interval을 더하는 형식으로 계산
+                p = 1 / (1 + self.iat_avg)
+                start_date += stats.geom.rvs(p) - 1  # 이전 착수일에 interval을 더하는 형식으로 계산
 
             if group_code not in ['BC_A', 'BC_S', 'PT_D', 'PT_L', 'PT_R',
                                   'VL_A', 'VL_B', 'VL_D', 'VL_E', 'VL_F', 'VL_S']:
@@ -261,6 +285,7 @@ class DataGenerator:
                    start_date, duration, due_date, pre_buffer, post_buffer]
 
             df_blocks.append(row)
+            num_blocks += 1
 
         df_blocks = pd.DataFrame(df_blocks, columns=columns)
 
@@ -277,10 +302,12 @@ if __name__ == '__main__':
 
     # validation data generation
     block_data_path = "../input/configurations/block_data.xlsx"
-    num_blocks = 50
+    # num_blocks = 50
+    time_horizon = 30
 
     data_src = DataGenerator(block_data_path,
-                             num_blocks=num_blocks)
+                             time_horizon=time_horizon,
+                             fix_time_horizon=True)
 
     file_dir = "../input/validation/"
     if not os.path.exists(file_dir):
