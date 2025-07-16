@@ -271,7 +271,7 @@ class DataGenerator:
                     weight = self.generate_weight(group_code, process_type, length, breadth, height)
 
                 workload_h1 = df_sample.loc[idx, 'workload_h1']
-                workload_h2 = df_sample.loc[idx, 'workload_h1']
+                workload_h2 = df_sample.loc[idx, 'workload_h2']
 
                 duration = df_sample.loc[idx, 'duration']
 
