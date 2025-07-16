@@ -543,7 +543,8 @@ class Factory:
                           breadth=float(row['breadth']),
                           height=float(row['height']),
                           workload_h1=int(row['workload_h1']),
-                          workload_h2=int(row['workload_h2']))
+                          workload_h2=int(row['workload_h2']),
+                          importance=float(row['weight']) / 322)
 
             blocks.append(block)
 

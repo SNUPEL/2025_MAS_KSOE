@@ -18,7 +18,8 @@ class Block:
                  breadth=None,
                  height=None,
                  workload_h1=None,
-                 workload_h2=None):
+                 workload_h2=None,
+                 importance=None):
 
         self.name = name
         self.id = id
@@ -33,8 +34,11 @@ class Block:
         self.height = height
         self.workload_h1 = workload_h1
         self.workload_h2 = workload_h2
+        self.importance = importance
 
         self.allocated_bay = None
+        self.working_start = None
+        self.working_finish = None
         self.x = None
         self.y = None
 
@@ -171,6 +175,7 @@ class Bay:
         del self.call_for_spatial_arrangement[block.id]
 
         # 작업 시작
+        block.working_start = self.env.now
         if self.monitor.use_recording:
             self.monitor.record(self.env.now,
                                 block=block.name,
@@ -179,8 +184,9 @@ class Bay:
                                 y_coordinate=block.y,
                                 event="Working_Started")
 
-        yield self.env.timeout(block.duration)
+        yield self.env.timeout(block.duration - 1)
 
+        block.working_finish = self.env.now
         if self.monitor.use_recording:
             self.monitor.record(self.env.now,
                                 block=block.name,
@@ -222,6 +228,8 @@ class Sink:
         self.num_blocks_completed += 1
         self.completion_date = self.env.now
 
+        self.monitor.total_weighted_tardiness += block.weight * max(block.working_finish - block.due_date, 0)
+
         if self.monitor.use_recording:
             self.monitor.record(self.env.now,
                                 block=block.name,
@@ -252,6 +260,8 @@ class Monitor:
         self.x_coordinate = []
         self.y_coordinate = []
         self.event = []
+
+        self.total_weighted_tardiness = 0.0
 
     def set_scheduling_flag(self,
                             scheduling_mode='machine_scheduling'):
