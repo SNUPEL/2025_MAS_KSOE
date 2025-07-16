@@ -220,20 +220,20 @@ class Factory:
 
         for _, block_info in self.df_blocks.iterrows():
             for _, bay_info in self.df_bays.iterrows():
-                flag_size_constraint = (int(block_info["Breadth"]) <= int(bay_info["Block_Breadth"])
-                                        and int(block_info["Height"]) <= int(bay_info["Block_Height"]))
+                flag_size_constraint = (int(block_info["breadth"]) <= int(bay_info["block_breadth"])
+                                        and int(block_info["height"]) <= int(bay_info["block_height"]))
 
-                if block_info["Process_Type"] == "Final조립":
-                    flag_weight_constraint = (int(block_info["Weight"]) <= int(bay_info["Block_T/O_Weight"]))
+                if block_info["process_type"] == "Final조립":
+                    flag_weight_constraint = (int(block_info["weight"]) <= int(bay_info["block_turnover_weight"]))
                 else:
-                    flag_weight_constraint = (int(block_info["Weight"]) <= int(bay_info["Block_Weight"]))
+                    flag_weight_constraint = (int(block_info["weight"]) <= int(bay_info["block_weight"]))
 
-                flag_capacity_constraint = ((int(block_info["Workload_H01"]) / int(block_info["Duration"])
-                                             <= int(bay_info["Capacity_H01"])
-                                            and (int(block_info["Workload_H02"]) / int(block_info["Duration"])
-                                                 <= int(bay_info["Capacity_H02"]))))
+                flag_capacity_constraint = ((int(block_info["workload_h1"]) / int(block_info["duration"])
+                                             <= int(bay_info["capacity_h1"])
+                                            and (int(block_info["workload_h2"]) / int(block_info["duration"])
+                                                 <= int(bay_info["capacity_h2"]))))
 
-                eligibility_matrix[int(block_info["Block_ID"]),int(bay_info["Bay_ID"])] \
+                eligibility_matrix[int(block_info["block_id"]),int(bay_info["bay_id"])] \
                     = flag_size_constraint & flag_weight_constraint & flag_capacity_constraint
 
         return eligibility_matrix
@@ -335,11 +335,11 @@ class Factory:
                 # block 노드와 bay 노드 간 엣지 구성
                 for _, block_info in self.df_blocks.iterrows():
                     for _, bay_info in self.df_bays.iterrows():
-                        if self.eligibility_matrix[int(block_info["Block_ID"]),int(bay_info["Bay_ID"])]:
-                            edge_block_to_bay[0].append(int(block_info["Block_ID"]))
-                            edge_block_to_bay[1].append(int(bay_info["Bay_ID"]))
-                            edge_bay_to_block[0].append(int(bay_info["Bay_ID"]))
-                            edge_bay_to_block[1].append(int(block_info["Block_ID"]))
+                        if self.eligibility_matrix[int(block_info["block_id"]),int(bay_info["bay_id"])]:
+                            edge_block_to_bay[0].append(int(block_info["block_id"]))
+                            edge_block_to_bay[1].append(int(bay_info["bay_id"]))
+                            edge_bay_to_block[0].append(int(bay_info["bay_id"]))
+                            edge_bay_to_block[1].append(int(block_info["block_id"]))
 
                 # block 노드 간 엣지 구성
                 for block_from in self.monitor.queue_for_agent1.values():
@@ -406,10 +406,10 @@ class Factory:
                 # block 노드와 bay 노드 간 엣지 구성
                 target_block = self.monitor.queue_for_agent2
                 for _, bay_info in self.df_bays.iterrows():
-                    if self.eligibility_matrix[target_block.id, int(bay_info["Bay_ID"])]:
+                    if self.eligibility_matrix[target_block.id, int(bay_info["bay_id"])]:
                         edge_block_to_bay[0].append(0)
-                        edge_block_to_bay[1].append(int(bay_info["Bay_ID"]))
-                        edge_bay_to_block[0].append(int(bay_info["Bay_ID"]))
+                        edge_block_to_bay[1].append(int(bay_info["bay_id"]))
+                        edge_bay_to_block[0].append(int(bay_info["bay_id"]))
                         edge_bay_to_block[1].append(0)
 
                 # bay 노드 간 엣지 구성
@@ -531,19 +531,19 @@ class Factory:
 
         blocks = []
         for _, row in self.df_blocks.iterrows():
-            block = Block(name=row['Block_Name'],
-                          id=int(row['Block_ID']),
-                          process_type=row['Process_Type'],
-                          ship_type=row['Ship_Type'],
-                          start_date=int(row['Start_Date']),
-                          duration=int(row['Duration']),
-                          due_date=float(row['Due_Date']),
-                          weight=float(row['Weight']),
-                          length=float(row['Length']),
-                          breadth=float(row['Breadth']),
-                          height=float(row['Height']),
-                          workload_h1=int(row['Workload_H01']),
-                          workload_h2=int(row['Workload_H02']))
+            block = Block(name=row['block_name'],
+                          id=int(row['block_id']),
+                          process_type=row['process_type'],
+                          ship_type=row['ship_type'],
+                          start_date=int(row['start_date']),
+                          duration=int(row['duration']),
+                          due_date=float(row['due_date']),
+                          weight=float(row['weight']),
+                          length=float(row['length']),
+                          breadth=float(row['breadth']),
+                          height=float(row['height']),
+                          workload_h1=int(row['workload_h1']),
+                          workload_h2=int(row['workload_h2']))
 
             blocks.append(block)
 
