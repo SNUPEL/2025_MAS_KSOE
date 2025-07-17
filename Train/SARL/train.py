@@ -53,6 +53,7 @@ def get_config():
     parser.add_argument("--num_actor_layers", type=int, default=2, help="number of actor layers")
     parser.add_argument("--num_critic_layers", type=int, default=2, help="number of critic layers")
 
+    parser.add_argument("--reward_weight", type=tuple, default=(0.5, 0.5), help="reward weight")
     parser.add_argument("--num_episodes", type=int, default=2000, help="number of episodes")
     parser.add_argument("--lr", type=float, default=0.0001, help="learning rate")
     parser.add_argument("--lr_decay", type=float, default=1.0, help="learning rate decay ratio")
@@ -120,6 +121,7 @@ def train(config):
     num_critic_layers = config.num_critic_layers
 
     # 강화학습 알고리즘 관련 파라미터
+    reward_weight = config.reward_weight
     num_episodes = config.num_episodes
     lr = config.lr
     lr_decay = config.lr_decay
@@ -183,6 +185,7 @@ def train(config):
                   agent1=algorithm_agent1,
                   agent2=algorithm_agent2,
                   agent3=algorithm_agent3,
+                  reward_weight=reward_weight,
                   use_recording=use_recording,
                   use_communication=use_communication,
                   use_spatial_arrangement=use_spatial_arrangement)
@@ -415,6 +418,7 @@ def train(config):
                           agent1=algorithm_agent1,
                           agent2=algorithm_agent2,
                           agent3=algorithm_agent3,
+                          reward_weight=reward_weight,
                           use_recording=use_recording,
                           use_communication=use_communication,
                           use_spatial_arrangement=use_spatial_arrangement)
