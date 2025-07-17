@@ -379,12 +379,12 @@ class Factory:
                 # modified due date (MDD)
                 elif self.agent1 == "MDD":
                     for block in self.monitor.queue_for_agent1.values():
-                        priority_idx[block.id] = 1 / max(block.due_date, self.current_date + block.duration)
+                        priority_idx[block.id] = 1 / max(block.due_date, self.current_date + block.duration - 1)
                 # least slack time (LST)
                 elif self.agent1 == "LST":
                     for block in self.monitor.queue_for_agent1.values():
-                        priority_idx[block.id] = 1 / (block.duration - self.current_date - block.duration) \
-                            if block.duration - self.current_date - block.duration > 0 else 1
+                        priority_idx[block.id] = 1 / (block.due_date - self.current_date - block.duration + 1) \
+                            if block.due_date - self.current_date - block.duration + 1 > 0 else 1
                 # random (RAND)
                 else:
                     for block in self.monitor.queue_for_agent1.values():
@@ -450,13 +450,12 @@ class Factory:
                     for bay in self.bays.values():
                         occupied_space_ratio = bay.occupied_space / (bay.length * bay.breadth) * 100
                         priority_idx[bay.id] = 1 / occupied_space_ratio if occupied_space_ratio > 0 else 1
-                # lowest capacity remaining (LCR)
+                # most capacity remaining (MCR)
                 elif self.agent2 == "LCR":
                     for bay in self.bays.values():
-                        capacity_ratio_h1 = bay.workload_h1 / bay.capacity_h1 * 100
-                        capacity_ratio_h2 = bay.workload_h2 / bay.capacity_h2 * 100
-                        capacity_ratio_avg = (capacity_ratio_h1 + capacity_ratio_h2) / 2
-                        priority_idx[bay.id] = 1 / capacity_ratio_avg if capacity_ratio_avg > 0 else 1
+                        capacity_ratio = ((bay.daily_workload_h1 + bay.daily_workload_h2)
+                                          / (bay.capacity_h1 + bay.capacity_h2) * 100)
+                        priority_idx[bay.id] = 1 / capacity_ratio if capacity_ratio > 0 else 1
                 # randon (RAND)
                 else:
                     for bay in self.bays.values():
