@@ -548,9 +548,9 @@ class Factory:
         daily_workload = []
         for bay in self.bays.values():
             daily_workload.append((bay.daily_workload_h1 + bay.daily_workload_h2)
-                                  / (bay.capacity_h1 + bay.capacity_h2))
+                                  / (bay.capacity_h1 + bay.capacity_h2) * 100)
 
-        reward2 = np.std(daily_workload) * 2.0
+        reward2 = np.std(daily_workload) / 50
 
         total_reward = self.reward_weight[0] * reward1 + self.reward_weight[1] * reward2
 
