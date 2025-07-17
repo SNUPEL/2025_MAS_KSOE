@@ -10,8 +10,8 @@ class DataGenerator:
                  bay_data_path,
                  num_blocks=50,
                  time_horizon=30,
-                 iat_avg=0.1,
-                 buffer_avg=1.5,
+                 iat_avg=0.8,
+                 buffer_avg=0.8,
                  weight_factor=0.7,
                  fix_time_horizon=False):
 

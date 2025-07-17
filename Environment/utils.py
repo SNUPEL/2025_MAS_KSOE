@@ -173,7 +173,7 @@ if __name__ == "__main__":
     # print(block_max, area_max, workload_h1_max, workload_h2_max)
 
     df_result = []
-    columns = ['instance',
+    columns = ['instance', 'num_blocks', 'start_date', 'finish_date',
                'block_max', 'area_max', 'workload_h1_max', 'workload_h2_max',
                'block_avg', 'area_avg', 'workload_h1_avg', 'workload_h2_avg']
 
@@ -184,10 +184,17 @@ if __name__ == "__main__":
 
     for i in range(1, 21):
         file_path = f"../input/validation/instance-{i}.xlsx"
+        instance_df = pd.read_excel(file_path)
+        instance_df["finish_date"] = instance_df["start_date"] + instance_df["duration"] - 1
+
+        num_blocks = instance_df.shape[0]
+        start_date = instance_df["start_date"].min()
+        finish_date = instance_df["finish_date"].max()
+
         block_max, area_max, workload_h1_max, workload_h2_max, block_avg, area_avg, workload_h1_avg, workload_h2_avg = load_analysis(file_path, graph=False)
         print(block_max, area_max, workload_h1_max, workload_h2_max, block_avg, area_avg, workload_h1_avg, workload_h2_avg)
 
-        row = [i,
+        row = [i, num_blocks, start_date, finish_date,
                block_max, area_max, workload_h1_max, workload_h2_max,
                block_avg, area_avg, workload_h1_avg, workload_h2_avg]
 
@@ -195,6 +202,6 @@ if __name__ == "__main__":
 
     df_result = pd.DataFrame(df_result, columns=columns)
 
-    save_path = f'../data/validation_result_iat{data_gen.iat_avg}_buffer{data_gen.buffer_avg}.xlsx'
+    save_path = f'../data/validation_result/validation_result_iat{data_gen.iat_avg}_buffer{data_gen.buffer_avg}.xlsx'
 
     df_result.to_excel(save_path, sheet_name=f'iat {data_gen.iat_avg}_buffer {data_gen.buffer_avg}', index=False)
