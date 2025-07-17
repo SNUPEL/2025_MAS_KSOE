@@ -11,7 +11,7 @@ class DataGenerator:
                  num_blocks=50,
                  time_horizon=30,
                  iat_avg=0.1,
-                 buffer_avg=0.4,
+                 buffer_avg=1.5,
                  weight_factor=0.7,
                  fix_time_horizon=False):
 
@@ -320,10 +320,12 @@ if __name__ == '__main__':
 
     # validation data generation
     block_data_path = "../input/configurations/block_data.xlsx"
+    bay_data_path = "../input/configurations/bay_data.xlsx"
     # num_blocks = 50
     time_horizon = 30
 
     data_src = DataGenerator(block_data_path,
+                             bay_data_path,
                              time_horizon=time_horizon,
                              fix_time_horizon=True)
 
