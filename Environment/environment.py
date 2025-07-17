@@ -338,18 +338,24 @@ class Factory:
 
                 # block 노드와 bay 노드 간 엣지 구성
                 for _, block_info in self.df_blocks.iterrows():
-                    for _, bay_info in self.df_bays.iterrows():
-                        if self.eligibility_matrix[int(block_info["block_id"]),int(bay_info["bay_id"])]:
-                            edge_block_to_bay[0].append(int(block_info["block_id"]))
-                            edge_block_to_bay[1].append(int(bay_info["bay_id"]))
-                            edge_bay_to_block[0].append(int(bay_info["bay_id"]))
-                            edge_bay_to_block[1].append(int(block_info["block_id"]))
+                    if block_info["start_date"] > self.sim_env.now:
+                        continue
+                    else:
+                        for _, bay_info in self.df_bays.iterrows():
+                            if self.eligibility_matrix[int(block_info["block_id"]),int(bay_info["bay_id"])]:
+                                edge_block_to_bay[0].append(int(block_info["block_id"]))
+                                edge_block_to_bay[1].append(int(bay_info["bay_id"]))
+                                edge_bay_to_block[0].append(int(bay_info["bay_id"]))
+                                edge_bay_to_block[1].append(int(block_info["block_id"]))
 
                 # block 노드 간 엣지 구성
                 for block_from in self.monitor.queue_for_agent1.values():
                     for block_to in self.monitor.queue_for_agent1.values():
-                        edge_block_to_block[0].append(block_from.id)
-                        edge_block_to_block[1].append(block_to.id)
+                        if (block_from.start_date > self.sim_env.now) or (block_to.start_date > self.sim_env.now):
+                            continue
+                        else:
+                            edge_block_to_block[0].append(block_from.id)
+                            edge_block_to_block[1].append(block_to.id)
 
                 # 이종 그래프 객체 생성
                 block_feature = torch.from_numpy(block_feature).type(torch.float32).to(self.device)
