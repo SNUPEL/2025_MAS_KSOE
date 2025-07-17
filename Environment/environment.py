@@ -223,10 +223,11 @@ class Factory:
                 flag_size_constraint = (int(block_info["breadth"]) <= int(bay_info["block_breadth"])
                                         and int(block_info["height"]) <= int(bay_info["block_height"]))
 
-                if block_info["process_type"] == "Final조립":
-                    flag_weight_constraint = (int(block_info["weight"]) <= int(bay_info["block_turnover_weight"]))
-                else:
-                    flag_weight_constraint = (int(block_info["weight"]) <= int(bay_info["block_weight"]))
+                # if block_info["process_type"] == "Final조립":
+                #     flag_weight_constraint = (int(block_info["weight"]) <= int(bay_info["block_turnover_weight"]))
+                # else:
+                #     flag_weight_constraint = (int(block_info["weight"]) <= int(bay_info["block_weight"]))
+                flag_weight_constraint = (int(block_info["weight"]) <= int(bay_info["block_weight"]))
 
                 flag_capacity_constraint = ((int(block_info["workload_h1"]) / int(block_info["duration"])
                                              <= int(bay_info["capacity_h1"])
@@ -265,10 +266,11 @@ class Factory:
                 for bay in self.bays.values():
                     flag_size_constraint = (breadth <= bay.block_breadth) and (height <= bay.block_height)
 
-                    if process_type == "Final조립":
-                        flag_weight_constraint = (weight <= bay.block_turnover_weight)
-                    else:
-                        flag_weight_constraint = (weight <= bay.block_weight)
+                    # if process_type == "Final조립":
+                    #     flag_weight_constraint = (weight <= bay.block_turnover_weight)
+                    # else:
+                    #     flag_weight_constraint = (weight <= bay.block_weight)
+                    flag_weight_constraint = (weight <= bay.block_weight)
 
                     flag_capacity_constraint = ((bay.daily_workload_h1 + workload_h1 / duration <= bay.capacity_h1)
                                                 and (bay.daily_workload_h2 + workload_h2 / duration <= bay.capacity_h2))
