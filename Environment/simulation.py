@@ -196,7 +196,7 @@ class Bay:
                                 event="Working_Finished")
 
         self.monitor.delay_log[block.name] = (block.importance,
-                                              block.finish_date,
+                                              block.working_finish,
                                               block.due_date)
         self.monitor.working_log[block.name] = (self.id,
                                                 block.working_start,
