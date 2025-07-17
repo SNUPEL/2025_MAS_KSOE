@@ -195,6 +195,14 @@ class Bay:
                                 y_coordinate=block.y,
                                 event="Working_Finished")
 
+        self.monitor.delay_log[block.name] = (block.importance,
+                                              block.finish_date,
+                                              block.due_date)
+        self.monitor.working_log[block.name] = (self.id,
+                                                block.working_start,
+                                                block.working_finish,
+                                                (block.workload_h1 + block.workload_h2) / block.duration)
+
         self.monitor.set_scheduling_flag(scheduling_mode="machine_scheduling")
 
         del self.monitor.blocks_working[block.id]
@@ -228,8 +236,6 @@ class Sink:
         self.num_blocks_completed += 1
         self.completion_date = self.env.now
 
-        self.monitor.total_weighted_tardiness += block.weight * max(block.working_finish - block.due_date, 0)
-
         if self.monitor.use_recording:
             self.monitor.record(self.env.now,
                                 block=block.name,
@@ -261,7 +267,8 @@ class Monitor:
         self.y_coordinate = []
         self.event = []
 
-        self.total_weighted_tardiness = 0.0
+        self.delay_log = {}
+        self.working_log = {}
 
     def set_scheduling_flag(self,
                             scheduling_mode='machine_scheduling'):

@@ -109,6 +109,31 @@ def main():
     visualize_blocks(blocks, canvas_width=100, canvas_height=100)
 
 
+def calculate_total_weighted_tardiness(log):
+    total_weighted_tardiness = 0.0
+
+    for importance, finish_date, due_date in log.values():
+        total_weighted_tardiness += importance * max(finish_date - due_date, 0)
+
+    return total_weighted_tardiness
+
+
+def calculate_average_workload_deviation(log, bay_capacity):
+    time_horizon = max([finish_date for _, _, finish_date, _ in log.values()])
+    workload = np.zeros((len(bay_capacity), int(time_horizon)))
+
+    for bay_id, start_date, finish_date, daily_workload in log.values():
+        workload[bay_id, int(start_date):int(finish_date)] += daily_workload
+
+    for bay_id, bay_capacity in enumerate(bay_capacity):
+        workload[bay_id, :] = workload[bay_id, :] / bay_capacity
+
+    workload_deviation = workload.std(axis=0)
+    average_workload_deviation = workload_deviation.mean()
+
+    return average_workload_deviation
+
+
 def load_analysis(file_path, graph=False):
     df_blocks = pd.read_excel(file_path, sheet_name='blocks', engine='openpyxl')
     df_blocks["finish_date"] = df_blocks["start_date"] + df_blocks["duration"] - 1
