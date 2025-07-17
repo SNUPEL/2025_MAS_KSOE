@@ -161,6 +161,7 @@ def train(config):
     if use_fixed_time_horizon:
         block_data_src = DataGenerator(
             block_data_path,
+            bay_data_path,
             time_horizon=time_horizon,
             iat_avg=iat_avg,
             buffer_avg=buffer_avg,
@@ -169,6 +170,7 @@ def train(config):
     else:
         block_data_src = DataGenerator(
             block_data_path,
+            bay_data_path,
             num_blocks=num_blocks,
             iat_avg=iat_avg,
             buffer_avg=buffer_avg,
@@ -388,7 +390,7 @@ def train(config):
             agent2.scheduler.step()
 
         if e == 1 or e % eval_every == 0:
-            average_tardiness, average_load_deviation = evaluate(agent1, agent2, agent3, val_dir, bay_data_src)
+            average_tardiness, average_load_deviation = evaluate(agent1, agent2, agent3, val_dir, bay_data_path)
 
             with open(log_dir + "validation_log.csv", 'a') as f:
                 f.write('%d,%1.4f,%1.4f\n' % (e, average_tardiness, average_load_deviation))

@@ -18,7 +18,8 @@ class Block:
                  breadth=None,
                  height=None,
                  workload_h1=None,
-                 workload_h2=None):
+                 workload_h2=None,
+                 importance=None):
 
         self.name = name
         self.id = id
@@ -33,8 +34,11 @@ class Block:
         self.height = height
         self.workload_h1 = workload_h1
         self.workload_h2 = workload_h2
+        self.importance = importance
 
         self.allocated_bay = None
+        self.working_start = None
+        self.working_finish = None
         self.x = None
         self.y = None
 
@@ -171,6 +175,7 @@ class Bay:
         del self.call_for_spatial_arrangement[block.id]
 
         # 작업 시작
+        block.working_start = self.env.now
         if self.monitor.use_recording:
             self.monitor.record(self.env.now,
                                 block=block.name,
@@ -179,8 +184,9 @@ class Bay:
                                 y_coordinate=block.y,
                                 event="Working_Started")
 
-        yield self.env.timeout(block.duration)
+        yield self.env.timeout(block.duration - 1)
 
+        block.working_finish = self.env.now
         if self.monitor.use_recording:
             self.monitor.record(self.env.now,
                                 block=block.name,
@@ -188,6 +194,14 @@ class Bay:
                                 x_coordinate=block.x,
                                 y_coordinate=block.y,
                                 event="Working_Finished")
+
+        self.monitor.delay_log[block.name] = (block.importance,
+                                              block.working_finish,
+                                              block.due_date)
+        self.monitor.working_log[block.name] = (self.id,
+                                                block.working_start,
+                                                block.working_finish,
+                                                (block.workload_h1 + block.workload_h2) / block.duration)
 
         self.monitor.set_scheduling_flag(scheduling_mode="machine_scheduling")
 
@@ -252,6 +266,9 @@ class Monitor:
         self.x_coordinate = []
         self.y_coordinate = []
         self.event = []
+
+        self.delay_log = {}
+        self.working_log = {}
 
     def set_scheduling_flag(self,
                             scheduling_mode='machine_scheduling'):

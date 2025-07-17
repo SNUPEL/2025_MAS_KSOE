@@ -7,14 +7,16 @@ import scipy.stats as stats
 class DataGenerator:
     def __init__(self,
                  block_data_path,
+                 bay_data_path,
                  num_blocks=50,
                  time_horizon=30,
                  iat_avg=0.1,
-                 buffer_avg=0.4,
+                 buffer_avg=1.5,
                  weight_factor=0.7,
                  fix_time_horizon=False):
 
         self.block_data_path = block_data_path
+        self.bay_data_path = bay_data_path
         self.num_blocks = num_blocks
         self.time_horizon = time_horizon
         self.iat_avg = iat_avg
@@ -22,6 +24,7 @@ class DataGenerator:
         self.weight_factor = weight_factor
         self.fix_time_horizon = fix_time_horizon
 
+        self.df_bay = pd.read_excel(bay_data_path, sheet_name="bays", engine="openpyxl")
         self.df_count = pd.read_excel(block_data_path, sheet_name="count", engine="openpyxl") # 그룹 개수에 대한 데이터프레임
         self.df_length = pd.read_excel(block_data_path, sheet_name="length", engine="openpyxl")  # 그룹 별 블록 길이 분포에 대한 데이터프레임
         self.df_breadth = pd.read_excel(block_data_path, sheet_name="breadth", engine="openpyxl")  # 그룹 별 블록 폭 분포에 대한 데이터프레임
@@ -202,6 +205,19 @@ class DataGenerator:
 
         return buffer
 
+    def check_eligibility(self, breadth, height, weight):
+        df_eligible_bay = self.df_bay[(breadth <= self.df_bay["block_breadth"]) &
+                                      (height <= self.df_bay["block_height"]) &
+                                      (weight <= self.df_bay["block_weight"])]
+
+        if len(df_eligible_bay) == 0:
+            df_weight = self.df_bay["block_weight"][(breadth <= self.df_bay["block_breadth"]) &
+                                                    (height <= self.df_bay["block_height"])]
+
+            weight = df_weight.max()
+
+        return breadth, height, weight
+
     def generate(self, file_path=None):
         columns = ["block_name", "block_id", "ship_type", "block_type", "process_type",
                    "length", "breadth", "height", "weight", "workload_h1", "workload_h2",
@@ -249,6 +265,8 @@ class DataGenerator:
                 height = self.generate_property(group_code, process_type, 'H')
 
                 weight = self.generate_weight(group_code, process_type, length, breadth, height)
+
+                breadth, height, weight = self.check_eligibility(breadth, height, weight)
 
                 workload_h1 = self.generate_workload_h1(group_code, length, breadth)
                 workload_h2 = self.generate_workload_h2(group_code, workload_h1)
@@ -302,10 +320,12 @@ if __name__ == '__main__':
 
     # validation data generation
     block_data_path = "../input/configurations/block_data.xlsx"
+    bay_data_path = "../input/configurations/bay_data.xlsx"
     # num_blocks = 50
     time_horizon = 30
 
     data_src = DataGenerator(block_data_path,
+                             bay_data_path,
                              time_horizon=time_horizon,
                              fix_time_horizon=True)
 

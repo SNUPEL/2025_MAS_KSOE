@@ -1,10 +1,12 @@
 import os
 import torch
+import numpy as np
 
 from Environment.environment import Factory
+from Environment.utils import calculate_total_weighted_tardiness, calculate_average_workload_deviation
 
 
-def evaluate(agent1, agent2, agent3, val_dir, bay_data_src):
+def evaluate(agent1, agent2, agent3, val_dir, bay_data_path):
     if agent1.name == "RL":
         agent1.network.eval()
         use_communication = True
@@ -14,6 +16,11 @@ def evaluate(agent1, agent2, agent3, val_dir, bay_data_src):
         use_communication = agent2.use_communication
         device = agent2.device
 
+    if agent3 is not None:
+        use_spatial_arrangement = True
+    else:
+        use_spatial_arrangement = False
+
     val_paths = os.listdir(val_dir)
     tardiness_lst = []
     load_deviation_lst = []
@@ -21,15 +28,16 @@ def evaluate(agent1, agent2, agent3, val_dir, bay_data_src):
     with torch.no_grad():
         for path in val_paths:
             env = Factory(val_dir + path,
-                          bay_data_src,
+                          bay_data_path,
                           device=device,
                           agent1=agent1.name,
                           agent2=agent2.name,
-                          agent3=agent3.name,
+                          agent3=agent3.name if agent3 is not None else None,
                           use_recording=False,
-                          use_communication=use_communication)
+                          use_communication=use_communication,
+                          use_spatial_arrangement=use_spatial_arrangement)
 
-            state_agent1, _ = env.reset()
+            state_agent1 = env.reset()
 
             while True:
                 if env.agent_mode == "agent1":
@@ -56,7 +64,10 @@ def evaluate(agent1, agent2, agent3, val_dir, bay_data_src):
 
                     next_state_agent3, reward, done = env.step(action_agent2)
                 elif mode == "agent3":
-                    action_agent3 = None
+                    if use_spatial_arrangement:
+                        action_agent3 = agent3.act(state_agent3)
+                    else:
+                        action_agent3 = None
                     next_state_agent1, reward, done = env.step(action_agent3)
 
                 if mode == "agent1":
@@ -69,9 +80,17 @@ def evaluate(agent1, agent2, agent3, val_dir, bay_data_src):
                 if done:
                     break
 
-            # 추후 변경 예정
-            tardiness_lst.append(env.sink.completion_time)
-            load_deviation_lst.append(env.sink.completion_time)
+            delay_log = env.monitor.delay_log
+            total_weighted_tardiness = calculate_total_weighted_tardiness(delay_log)
+
+            working_log = env.monitor.working_log
+            bay_capacity = np.zeros(env.num_bays)
+            for i, row in env.df_bays.iterrows():
+                bay_capacity[int(row["bay_id"])] = row["capacity_h1"] + row["capacity_h2"]
+            average_load_deviation = calculate_average_workload_deviation(working_log, bay_capacity)
+
+            tardiness_lst.append(total_weighted_tardiness)
+            load_deviation_lst.append(average_load_deviation)
 
         tardiness_avg = sum(tardiness_lst) / len(tardiness_lst)
         load_deviation_avg = sum(load_deviation_lst) / len(load_deviation_lst)
