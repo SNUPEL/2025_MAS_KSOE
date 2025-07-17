@@ -44,6 +44,7 @@ class Factory:
                  agent1='RL',
                  agent2='RL',
                  agent3='NFP',
+                 reward_weight=(0.5, 0.5),
                  use_recording=False,
                  use_communication=True,
                  use_spatial_arrangement=False):
@@ -54,6 +55,7 @@ class Factory:
         self.agent1 = agent1
         self.agent2 = agent2
         self.agent3 = agent3
+        self.reward_weight = reward_weight
         self.use_recording = use_recording
         self.use_communication = use_communication
         self.use_spatial_arrangement = use_spatial_arrangement
@@ -525,7 +527,35 @@ class Factory:
         return state
 
     def _calculate_reward(self):
-        return 0.0
+        weighted_tardiness = []
+        for j in self.df_blocks["block_id"].values:
+            if j in self.monitor.blocks_unscheduled.keys():
+                block = self.monitor.blocks_unscheduled[j]
+            elif j in self.monitor.blocks_working.keys():
+                block = self.monitor.blocks_working[j]
+            else:
+                block = self.monitor.blocks_done[j]
+
+            if block.working_start is not None:
+                working_finish = block.working_start + block.duration - 1
+            else:
+                working_finish = self.sim_env.now + block.duration - 1
+
+            delay = max(working_finish - block.due_date, 0)
+            weighted_tardiness.append(block.importance * delay)
+
+        reward1 = sum(weighted_tardiness) / (self.num_blocks * self.df_blocks["duration"].max())
+
+        daily_workload = []
+        for bay in self.bays.values():
+            daily_workload.append((bay.daily_workload_h1 + bay.daily_workload_h2)
+                                  / (bay.capacity_h1 + bay.capacity_h2))
+
+        reward2 = np.std(daily_workload) * 2.0
+
+        total_reward = self.reward_weight[0] * reward1 + self.reward_weight[1] * reward2
+
+        return total_reward
 
     def _build_model(self):
         sim_env = simpy.Environment()
