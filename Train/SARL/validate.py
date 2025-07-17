@@ -6,7 +6,7 @@ from Environment.environment import Factory
 from Environment.utils import calculate_total_weighted_tardiness, calculate_average_workload_deviation
 
 
-def evaluate(agent1, agent2, agent3, val_dir, bay_data_src):
+def evaluate(agent1, agent2, agent3, val_dir, bay_data_path):
     if agent1.name == "RL":
         agent1.network.eval()
         use_communication = True
@@ -28,7 +28,7 @@ def evaluate(agent1, agent2, agent3, val_dir, bay_data_src):
     with torch.no_grad():
         for path in val_paths:
             env = Factory(val_dir + path,
-                          bay_data_src,
+                          bay_data_path,
                           device=device,
                           agent1=agent1.name,
                           agent2=agent2.name,
@@ -37,7 +37,7 @@ def evaluate(agent1, agent2, agent3, val_dir, bay_data_src):
                           use_communication=use_communication,
                           use_spatial_arrangement=use_spatial_arrangement)
 
-            state_agent1, _ = env.reset()
+            state_agent1 = env.reset()
 
             while True:
                 if env.agent_mode == "agent1":
