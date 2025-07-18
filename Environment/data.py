@@ -10,8 +10,8 @@ class DataGenerator:
                  bay_data_path,
                  num_blocks=50,
                  time_horizon=30,
-                 iat_avg=0.8,
-                 buffer_avg=0.8,
+                 iat_avg=0.1,
+                 buffer_avg=1.5,
                  weight_factor=0.7,
                  fix_time_horizon=False):
 
@@ -205,12 +205,29 @@ class DataGenerator:
 
         return buffer
 
-    def check_eligibility(self, breadth, height, weight):
+    def check_eligibility(self, group_code, process_type, breadth, height, weight):
         df_eligible_bay = self.df_bay[(breadth <= self.df_bay["block_breadth"]) &
                                       (height <= self.df_bay["block_height"]) &
                                       (weight <= self.df_bay["block_weight"])]
 
         if len(df_eligible_bay) == 0:
+            df_possible_bay = self.df_breadth.copy()
+            df_possible_bay['bay'] = df_possible_bay['bay'].apply(ast.literal_eval)
+            df_possible_bay = df_possible_bay[df_possible_bay['group'] == group_code]
+            df_possible_bay = df_possible_bay[df_possible_bay['process_type'] == process_type]
+
+            possible_properties = []
+            for bay in df_possible_bay['bay'].values[0]:
+                bay_breadth = self.df_bay[self.df_bay['bay_name'] == bay]['block_breadth'].values[0]
+                bay_height = self.df_bay[self.df_bay['bay_name'] == bay]['block_height'].values[0]
+                bay_properties = (bay_breadth, bay_height)
+                possible_properties.append(bay_properties)
+
+            idx = np.random.choice(len(possible_properties))
+            possible_property = possible_properties[idx]
+            breadth = possible_property[0]
+            height = possible_property[1]
+
             df_weight = self.df_bay["block_weight"][(breadth <= self.df_bay["block_breadth"]) &
                                                     (height <= self.df_bay["block_height"])]
 
@@ -266,7 +283,7 @@ class DataGenerator:
 
                 weight = self.generate_weight(group_code, process_type, length, breadth, height)
 
-                breadth, height, weight = self.check_eligibility(breadth, height, weight)
+                breadth, height, weight = self.check_eligibility(group_code, process_type, breadth, height, weight)
 
                 workload_h1 = self.generate_workload_h1(group_code, length, breadth)
                 workload_h2 = self.generate_workload_h2(group_code, workload_h1)
