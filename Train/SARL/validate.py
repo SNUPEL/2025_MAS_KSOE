@@ -27,6 +27,7 @@ def evaluate(agent1, agent2, agent3, val_dir, bay_data_path):
 
     with torch.no_grad():
         for path in val_paths:
+            print(path)
             env = Factory(val_dir + path,
                           bay_data_path,
                           device=device,

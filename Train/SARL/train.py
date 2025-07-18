@@ -39,13 +39,13 @@ def get_config():
     parser.add_argument("--iat_avg", type=float, default=0.1, help="average inter-arrival time")
     parser.add_argument("--buffer_avg", type=float, default=1.5, help="average buffer")
     parser.add_argument("--weight_factor", type=float, default=0.7, help="weight factor")
-    parser.add_argument("--bay_data_path", type=str, default="./input/configurations/bay_data.xlsx", help="bay data")
-    parser.add_argument("--block_data_path", type=str, default="./input/configurations/block_data.xlsx", help="block data")
+    parser.add_argument("--bay_data_path", type=str, default="C:/python_project/2025_MAS_KSOE/input/configurations/bay_data.xlsx", help="bay data")
+    parser.add_argument("--block_data_path", type=str, default="C:/python_project/2025_MAS_KSOE/input/configurations/block_data.xlsx", help="block data")
     parser.add_argument("--val_dir", type=str, default=None, help="directory where the validation data are stored")
 
     parser.add_argument("--algorithm_agent1", type=str, default=None, help="agent1")
     parser.add_argument("--algorithm_agent2", type=str, default=None, help="agent2")
-    parser.add_argument("--algorithm_agent3", type=str, default=None, help="agent2")
+    parser.add_argument("--algorithm_agent3", type=str, default=None, help="agent3")
 
     parser.add_argument("--embed_dim", type=int, default=128, help="node embedding dimension")
     parser.add_argument("--num_heads", type=int, default=4, help="multi-head attention in HGT layers")
@@ -366,7 +366,6 @@ def train(config):
                     episode_average_loss += agent2.train(last_value)
 
             step += 1
-
             if done:
                 break
 
