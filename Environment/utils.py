@@ -8,6 +8,9 @@ import matplotlib.pyplot as plt
 
 from shapely.geometry import Polygon, Point
 
+from Environment.data import DataGenerator
+from data import *
+
 
 class MiniBlock:
     def __init__(self, length, breadth):
@@ -153,17 +156,52 @@ def load_analysis(file_path, graph=False):
         workload_h1[int(row["start_date"]):int(row["finish_date"])] += int(row["workload_h1"]) / int(row["duration"])
         workload_h2[int(row["start_date"]):int(row["finish_date"])] += int(row["workload_h2"]) / int(row["duration"])
 
+
     if graph:
         fig, ax = plt.subplots(1, figsize=(16, 6))
         ax.plot(timeline, block)
         plt.show()
         plt.close()
 
-    return np.max(block), np.max(area), np.max(workload_h1), np.max(workload_h2)
+    return np.max(block), np.max(area), np.max(workload_h1), np.max(workload_h2), np.average(block), np.average(area), np.average(workload_h1), np.average(workload_h2)
 
 
 if __name__ == "__main__":
     # main()
-    file_path = "../input/validation/instance-1.xlsx"
-    block_max, area_max, workload_h1_max, workload_h2_max = load_analysis(file_path, graph=True)
-    print(block_max, area_max, workload_h1_max, workload_h2_max)
+    # file_path = "../input/validation/instance-1.xlsx"
+    # block_max, area_max, workload_h1_max, workload_h2_max = load_analysis(file_path, graph=True)
+    # print(block_max, area_max, workload_h1_max, workload_h2_max)
+
+    df_result = []
+    columns = ['instance', 'num_blocks', 'start_date', 'finish_date',
+               'block_max', 'area_max', 'workload_h1_max', 'workload_h2_max',
+               'block_avg', 'area_avg', 'workload_h1_avg', 'workload_h2_avg']
+
+    block_data_path = "../input/configurations/block_data.xlsx"
+    bay_data_path = "../input/configurations/bay_data.xlsx"
+
+    data_gen = DataGenerator(block_data_path, bay_data_path)
+
+    for i in range(1, 21):
+        file_path = f"../input/validation/instance-{i}.xlsx"
+        instance_df = pd.read_excel(file_path)
+        instance_df["finish_date"] = instance_df["start_date"] + instance_df["duration"] - 1
+
+        num_blocks = instance_df.shape[0]
+        start_date = instance_df["start_date"].min()
+        finish_date = instance_df["finish_date"].max()
+
+        block_max, area_max, workload_h1_max, workload_h2_max, block_avg, area_avg, workload_h1_avg, workload_h2_avg = load_analysis(file_path, graph=False)
+        print(block_max, area_max, workload_h1_max, workload_h2_max, block_avg, area_avg, workload_h1_avg, workload_h2_avg)
+
+        row = [i, num_blocks, start_date, finish_date,
+               block_max, area_max, workload_h1_max, workload_h2_max,
+               block_avg, area_avg, workload_h1_avg, workload_h2_avg]
+
+        df_result.append(row)
+
+    df_result = pd.DataFrame(df_result, columns=columns)
+
+    save_path = f'../data/validation_result/validation_result_iat{data_gen.iat_avg}_buffer{data_gen.buffer_avg}.xlsx'
+
+    df_result.to_excel(save_path, sheet_name=f'iat {data_gen.iat_avg}_buffer {data_gen.buffer_avg}', index=False)
