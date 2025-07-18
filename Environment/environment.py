@@ -94,8 +94,8 @@ class Factory:
 
         if agent2 == "RL":
             self.block_feature_dim_agent2 = 8
-            self.bay_feature_dim_agent2 = 8
-            self.pairwise_feature_dim = 2
+            self.bay_feature_dim_agent2 = 3
+            self.pairwise_feature_dim = 0
 
             self.meta_data_agent2 = (
                 ["block", "bay",],
@@ -405,6 +405,11 @@ class Factory:
                 pairwise_feature = np.zeros((1, self.num_bays, self.pairwise_feature_dim))
 
                 # node feature 추가
+                for bay in self.bays.values():
+                    # 첫 번째 feature는 현재의 utilization
+                    bay_feature[bay.id, 0] = bay.daily_workload_h1 + bay.daily_workload_h2 / (bay.capacity_h1 + bay.capacity_h2)
+                    bay_feature[bay.id, 1] = bay.occupied_space / (bay.length * bay.breadth)
+                    bay_feature[bay.id, 2] = 1 / len(bay.blocks_in_bay) if len(bay.blocks_in_bay) > 0 else 1
 
                 # pairwise feature 추가
 
