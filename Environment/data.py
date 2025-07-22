@@ -78,6 +78,8 @@ class DataGenerator:
 
         if best_distribution_name == 'cauchy':
             property_value = stats.cauchy.rvs(*best_params)
+        elif best_distribution_name == 'chi2':
+            property_value = stats.chi2.rvs(*best_params)
         elif best_distribution_name == 'expon':
             property_value = stats.expon.rvs(*best_params)
         elif best_distribution_name == 'gamma':
