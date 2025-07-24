@@ -166,42 +166,123 @@ def load_analysis(file_path, graph=False):
     return np.max(block), np.max(area), np.max(workload_h1), np.max(workload_h2), np.average(block), np.average(area), np.average(workload_h1), np.average(workload_h2)
 
 
+# 실적 데이터 부하 분석을 위한 함수
+def load_analysis_real(file_path='../data/블록-계획데이터(예제)_수정_일자 변환_계획만.xlsx', bay_name=None, graph=False):
+    df_blocks = pd.read_excel(file_path, engine='openpyxl')
+
+    if bay_name:
+        df_blocks = df_blocks[df_blocks['정반_코드'] == bay_name]
+
+    start = df_blocks["착수계획"].min()
+    finish = df_blocks["완료계획"].max()
+
+    timeline = np.arange(start, finish)
+    block = np.zeros(finish - start)
+    area = np.zeros(finish - start)
+    workload_h1 = np.zeros(finish - start)
+    workload_h2 = np.zeros(finish - start)
+
+    for i, row in df_blocks.iterrows():
+        block[int(row["착수계획"]):int(row["완료계획"])] += 1
+        area[int(row["착수계획"]):int(row["완료계획"])] += int(row["L"]) * int(row["B"])
+        workload_h1[int(row["착수계획"]):int(row["완료계획"])] += int(row["H01"]) / int(row["계획공기"])
+        workload_h2[int(row["착수계획"]):int(row["완료계획"])] += int(row["H02"]) / int(row["계획공기"])
+
+
+    if graph:
+        fig, ax = plt.subplots(1, figsize=(16, 6))
+        ax.plot(timeline, area)
+        plt.show()
+        plt.close()
+
+    return np.max(block), np.max(area), np.max(workload_h1), np.max(workload_h2), np.average(block), np.average(area), np.average(workload_h1), np.average(workload_h2)
+
+
 if __name__ == "__main__":
-    # main()
-    # file_path = "../input/validation/instance-1.xlsx"
-    # block_max, area_max, workload_h1_max, workload_h2_max = load_analysis(file_path, graph=True)
-    # print(block_max, area_max, workload_h1_max, workload_h2_max)
-
-    df_result = []
-    columns = ['instance', 'num_blocks', 'start_date', 'finish_date',
-               'block_max', 'area_max', 'workload_h1_max', 'workload_h2_max',
-               'block_avg', 'area_avg', 'workload_h1_avg', 'workload_h2_avg']
-
+    file_path = '../data/블록-계획데이터(예제)_수정_bay 이름 변경.xlsx'
     block_data_path = "../input/configurations/block_data.xlsx"
     bay_data_path = "../input/configurations/bay_data.xlsx"
 
     data_gen = DataGenerator(block_data_path, bay_data_path)
 
-    for i in range(1, 21):
-        file_path = f"../input/validation/instance-{i}.xlsx"
-        instance_df = pd.read_excel(file_path)
-        instance_df["finish_date"] = instance_df["start_date"] + instance_df["duration"] - 1
+    df_bay = data_gen.df_bay
+    df_bay['bay_area'] = df_bay['bay_breadth'] * df_bay['bay_length']
+    df_block = pd.read_excel(file_path, engine='openpyxl')
 
-        num_blocks = instance_df.shape[0]
-        start_date = instance_df["start_date"].min()
-        finish_date = instance_df["finish_date"].max()
+    df_result = []
+    columns = ['bay_name', 'num_blocks', 'start_date', 'finish_date',
+                'block_max', 'area_max', 'workload_h1_max', 'workload_h2_max',
+               'area_max_proportion', 'workload_h1_max_proportion', 'workload_h2_max_proportion',
+                'block_avg', 'area_avg', 'workload_h1_avg', 'workload_h2_avg',
+               'area_avg_proportion', 'workload_h1_avg_proportion', 'workload_h2_avg_proportion']
 
-        block_max, area_max, workload_h1_max, workload_h2_max, block_avg, area_avg, workload_h1_avg, workload_h2_avg = load_analysis(file_path, graph=False)
-        print(block_max, area_max, workload_h1_max, workload_h2_max, block_avg, area_avg, workload_h1_avg, workload_h2_avg)
+    for bay in df_bay['bay_name']:
+        df_block_bay = df_block[df_block['정반_코드'] == bay]
+        if bay not in df_block_bay['정반_코드'].values:
+            continue
 
-        row = [i, num_blocks, start_date, finish_date,
+        block_max, area_max, workload_h1_max, workload_h2_max, block_avg, area_avg, workload_h1_avg, workload_h2_avg = load_analysis_real(file_path='../data/블록-계획데이터(예제)_수정_bay 이름 변경.xlsx',bay_name=bay,graph=True)
+
+        idx = df_bay[df_bay['bay_name'] == bay].index
+
+        area_max_proportion = area_max / df_bay.loc[idx, 'bay_area'].values[0]
+        workload_h1_max_proportion = workload_h1_max / df_bay.loc[idx, 'capacity_h1'].values[0]
+        workload_h2_max_proportion = workload_h2_max / df_bay.loc[idx, 'capacity_h2'].values[0]
+
+        area_avg_proportion = area_avg / df_bay.loc[idx, 'bay_area'].values[0]
+        workload_h1_avg_proportion = workload_h1_avg / df_bay.loc[idx, 'capacity_h1'].values[0]
+        workload_h2_avg_proportion = workload_h2_avg / df_bay.loc[idx, 'capacity_h2'].values[0]
+
+        row = [bay, df_block_bay.shape[0], df_block_bay['착수계획'].min(), df_block_bay['완료계획'].max(),
                block_max, area_max, workload_h1_max, workload_h2_max,
-               block_avg, area_avg, workload_h1_avg, workload_h2_avg]
-
+               area_max_proportion, workload_h1_max_proportion, workload_h2_max_proportion,
+               block_avg, area_avg, workload_h1_avg, workload_h2_avg,
+               area_avg_proportion, workload_h1_avg_proportion, workload_h2_avg_proportion]
+        print(bay)
+        print(block_max, area_max, workload_h1_max, workload_h2_max, block_avg, area_avg, workload_h1_avg,
+              workload_h2_avg)
         df_result.append(row)
 
+
     df_result = pd.DataFrame(df_result, columns=columns)
+    # df_result.to_excel('../data/실적 데이터 부하_bay별.xlsx', index=False)
 
-    save_path = f'../data/validation_result/validation_result_iat{data_gen.iat_avg}_buffer{data_gen.buffer_avg}.xlsx'
 
-    df_result.to_excel(save_path, sheet_name=f'iat {data_gen.iat_avg}_buffer {data_gen.buffer_avg}', index=False)
+    # main()
+    # file_path = "../input/validation/instance-1.xlsx"
+    # block_max, area_max, workload_h1_max, workload_h2_max = load_analysis(file_path, graph=True)
+    # print(block_max, area_max, workload_h1_max, workload_h2_max)
+
+    # df_result = []
+    # columns = ['instance', 'num_blocks', 'start_date', 'finish_date',
+    #            'block_max', 'area_max', 'workload_h1_max', 'workload_h2_max',
+    #            'block_avg', 'area_avg', 'workload_h1_avg', 'workload_h2_avg']
+    #
+    # block_data_path = "../input/configurations/block_data.xlsx"
+    # bay_data_path = "../input/configurations/bay_data.xlsx"
+    #
+    # data_gen = DataGenerator(block_data_path, bay_data_path)
+    #
+    # for i in range(1, 21):
+    #     file_path = f"../input/validation/instance-{i}.xlsx"
+    #     instance_df = pd.read_excel(file_path)
+    #     instance_df["finish_date"] = instance_df["start_date"] + instance_df["duration"] - 1
+    #
+    #     num_blocks = instance_df.shape[0]
+    #     start_date = instance_df["start_date"].min()
+    #     finish_date = instance_df["finish_date"].max()
+    #
+    #     block_max, area_max, workload_h1_max, workload_h2_max, block_avg, area_avg, workload_h1_avg, workload_h2_avg = load_analysis(file_path, graph=False)
+    #     print(block_max, area_max, workload_h1_max, workload_h2_max, block_avg, area_avg, workload_h1_avg, workload_h2_avg)
+    #
+    #     row = [i, num_blocks, start_date, finish_date,
+    #            block_max, area_max, workload_h1_max, workload_h2_max,
+    #            block_avg, area_avg, workload_h1_avg, workload_h2_avg]
+    #
+    #     df_result.append(row)
+    #
+    # df_result = pd.DataFrame(df_result, columns=columns)
+    #
+    # save_path = f'../data/validation_result/validation_result_iat{data_gen.iat_avg}_buffer{data_gen.buffer_avg}.xlsx'
+    #
+    # df_result.to_excel(save_path, sheet_name=f'iat {data_gen.iat_avg}_buffer {data_gen.buffer_avg}', index=False)
