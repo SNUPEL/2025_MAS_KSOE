@@ -93,7 +93,7 @@ def evaluate(agent1, agent2, agent3, val_dir, bay_data_path):
             tardiness_lst.append(total_weighted_tardiness)
             load_deviation_lst.append(average_load_deviation)
 
-        tardiness_avg = sum(tardiness_lst) / len(tardiness_lst)
-        load_deviation_avg = sum(load_deviation_lst) / len(load_deviation_lst)
+        tardiness_avg = sum(tardiness_lst) / len(tardiness_lst) if len(tardiness_lst) > 0 else 0
+        load_deviation_avg = sum(load_deviation_lst) / len(load_deviation_lst) if len(load_deviation_lst) > 0 else 0
 
         return tardiness_avg, load_deviation_avg
