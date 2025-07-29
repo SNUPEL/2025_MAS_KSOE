@@ -222,18 +222,20 @@ class DataGenerator:
             for bay in df_possible_bay['bay'].values[0]:
                 bay_breadth = self.df_bay[self.df_bay['bay_name'] == bay]['block_breadth'].values[0]
                 bay_height = self.df_bay[self.df_bay['bay_name'] == bay]['block_height'].values[0]
-                bay_properties = (bay_breadth, bay_height)
+                bay_weight = self.df_bay[self.df_bay['bay_name'] == bay]['block_weight'].values[0]
+                bay_properties = (bay_breadth, bay_height, bay_weight)
                 possible_properties.append(bay_properties)
 
             idx = np.random.choice(len(possible_properties))
             possible_property = possible_properties[idx]
             breadth = possible_property[0]
             height = possible_property[1]
+            weight = possible_property[2]
 
-            df_weight = self.df_bay["block_weight"][(breadth <= self.df_bay["block_breadth"]) &
-                                                    (height <= self.df_bay["block_height"])]
-
-            weight = df_weight.max()
+            # df_weight = self.df_bay["block_weight"][(breadth <= self.df_bay["block_breadth"]) &
+            #                                         (height <= self.df_bay["block_height"])]
+            #
+            # weight = df_weight.max()
 
         return breadth, height, weight
 
