@@ -339,6 +339,7 @@ def train(config):
                     action_agent2, log_prob_agent2, value_agent2, probs = agent2.get_action(state_agent2)
 
                     if e == 1 or e % 10 == 0:
+                        # Remark : 10에피소드마다 한 번씩 MDP.json 저장
                         node_feature_0 = state_agent2.graph_feature.node_stores[0]['x'].cpu().tolist()  # shape: [1,8]
                         node_feature_1 = state_agent2.graph_feature.node_stores[1]['x'].cpu().tolist()  # shape: [17,3]
 
@@ -347,7 +348,6 @@ def train(config):
                             'node_Block': node_feature_0,
                             'node_Bay': node_feature_1
                         }
-                        # action_prob는 예시로 빈 값 설정 (알고리즘 실행 결과로 채울 수 있음)
                         action_prob = probs.cpu().tolist()  # 예: [0.1, 0.3, 0.6] 처럼 softmax 결과
 
                         # JSON 데이터에 step 단위로 추가
@@ -355,7 +355,6 @@ def train(config):
                             'state': state,
                             'action': action_prob
                         }
-
 
                 else:
                     action_agent2 = agent2.act(state_agent2)
