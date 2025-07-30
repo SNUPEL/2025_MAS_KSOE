@@ -133,7 +133,7 @@ class BAScheduler(nn.Module):
                     state_value = self.critic[i](h_pooled)
 
         if self.use_parameter_sharing:
-            return action.item(), action_logprob.item(), state_value.squeeze().item()
+            return action.item(), action_logprob.item(), state_value.squeeze().item(), probs
         else:
             return action.item(), action_logprob.item()
 

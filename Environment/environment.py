@@ -425,12 +425,13 @@ class Factory:
                 # node feature 추가
                 for bay in self.bays.values():
                     # 첫 번째 feature는 현재의 utilization
-                    bay_feature[bay.id, 0] = bay.daily_workload_h1 + bay.daily_workload_h2 / (bay.capacity_h1 + bay.capacity_h2)
+                    bay_feature[bay.id, 0] = (bay.daily_workload_h1 + bay.daily_workload_h2) / (bay.capacity_h1 + bay.capacity_h2)
                     bay_feature[bay.id, 1] = bay.occupied_space / (bay.length * bay.breadth)
-                    bay_feature[bay.id, 2] = 1 / len(bay.blocks_in_bay) if len(bay.blocks_in_bay) > 0 else 1
-
+                    bay_feature[bay.id, 2] = 1 / (len(bay.blocks_in_bay)+1) if len(bay.blocks_in_bay) > 0 else 1
+                # print("Debug Call")
+                # for bay in self.bays.values():
+                #     print(f"\tBay {bay.id} : {bay_feature[bay.id, :]}")
                 # pairwise feature 추가
-
 
                 # 그래프 내 노드 간 엣지 모델링
                 edge_bay_to_bay = [[], []]
@@ -583,7 +584,7 @@ class Factory:
 
         total_reward = self.reward_weight[0] * reward1 + self.reward_weight[1] * reward2
 
-        return total_reward
+        return total_reward * 100
 
     def _build_model(self):
         sim_env = simpy.Environment()

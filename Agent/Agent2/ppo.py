@@ -143,10 +143,10 @@ class Agent2:
 
         self.network.eval()
         with torch.no_grad():
-            action, log_prob, value = self.network.act(graph_feature=state.graph_feature,
+            action, log_prob, value, probs = self.network.act(graph_feature=state.graph_feature,
                                                        pairwise_feature=state.pairwise_feature,
                                                        mask=state.mask)
-        return action, log_prob, value
+        return action, log_prob, value, probs
 
     def train(self,
               last_value):
@@ -193,7 +193,14 @@ class Agent2:
                 value_loss = F.smooth_l1_loss(new_values, td_target)
 
             loss = - self.P_coeff * policy_loss + self.V_coeff * value_loss - self.E_coeff * dist_entropy
+            print(f'\tTraining: Epoch {i}')
+            print(f"\t\tTD target stats: mean={td_target.mean().item()}, std={td_target.std().item()}")
+            print(f"\t\tValue pred stats: mean={new_values.mean().item()}, std={new_values.std().item()}")
+            print(f"\t\tAdvantage stats: mean={advantage.mean().item()}, std={advantage.std().item()}")
 
+            print(f"\t\tMean policy loss: {policy_loss.mean().item()}")
+            print(f"\t\tMean value loss: {value_loss.item()}")
+            print(f"\t\tMean entropy: {dist_entropy.mean().item()}")
             self.optimizer.zero_grad()
             loss.mean().backward()
             self.optimizer.step()

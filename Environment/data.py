@@ -212,50 +212,33 @@ class DataGenerator:
                                       (height <= self.df_bay["block_height"]) &
                                       (weight <= self.df_bay["block_weight"])]
 
-        df_possible_bay = self.df_breadth.copy()
-        df_possible_bay['bay'] = df_possible_bay['bay'].apply(ast.literal_eval)
-
-        df_possible_bay = df_possible_bay[df_possible_bay['group'] == group_code]
-        df_possible_bay = df_possible_bay[df_possible_bay['process_type'] == process_type]
-
-        if len(df_eligible_bay) > 0:
-            bay_name_series = df_eligible_bay['bay_name']
-
-
-        elif len(df_eligible_bay) == 0:
+        if len(df_eligible_bay) == 0:
+            df_possible_bay = self.df_breadth.copy()
+            df_possible_bay['bay'] = df_possible_bay['bay'].apply(ast.literal_eval)
+            df_possible_bay = df_possible_bay[df_possible_bay['group'] == group_code]
+            df_possible_bay = df_possible_bay[df_possible_bay['process_type'] == process_type]
 
             possible_properties = []
             for bay in df_possible_bay['bay'].values[0]:
                 bay_breadth = self.df_bay[self.df_bay['bay_name'] == bay]['block_breadth'].values[0]
                 bay_height = self.df_bay[self.df_bay['bay_name'] == bay]['block_height'].values[0]
-                bay_properties = (bay_breadth, bay_height)
+                bay_weight = self.df_bay[self.df_bay['bay_name'] == bay]['block_weight'].values[0]
+                bay_properties = (bay_breadth, bay_height, bay_weight)
                 possible_properties.append(bay_properties)
 
             idx = np.random.choice(len(possible_properties))
             possible_property = possible_properties[idx]
             breadth = possible_property[0]
             height = possible_property[1]
+            weight = possible_property[2]
 
-            df_weight = self.df_bay["block_weight"][(breadth <= self.df_bay["block_breadth"]) &
-                                                    (height <= self.df_bay["block_height"])]
+            # df_weight = self.df_bay["block_weight"][(breadth <= self.df_bay["block_breadth"]) &
+            #                                         (height <= self.df_bay["block_height"])]
 
-            weight = df_weight.max()
-            bay_name_df = self.df_bay[(self.df_bay['block_breadth'] == breadth) &
-                                   (self.df_bay['block_height'] == height)
-                                   & (self.df_bay['block_weight'] == weight)]
-            bay_name_series = bay_name_df['bay_name']
-
-        bay_name_series = list(bay_name_series)
-        idx = np.random.choice(range(len(bay_name_series)))
-        bay_name = bay_name_series[idx]
-        if bay_name not in df_possible_bay['bay'].values[0]:
-            idx = np.random.choice(range(len(bay_name_series)))
-            bay_name = bay_name_series[idx]
-
-        return bay_name, breadth, height, weight
+        return breadth, height, weight
 
     def generate(self, file_path=None):
-        columns = ["block_name", "block_id", "ship_type", "block_type", "process_type", "bay_name",
+        columns = ["block_name", "block_id", "ship_type", "block_type", "process_type",
                    "length", "breadth", "height", "weight", "workload_h1", "workload_h2",
                    "start_date", "duration", "due_date", "pre_buffer", "post_buffer"]
 
@@ -302,7 +285,7 @@ class DataGenerator:
 
                 weight = self.generate_weight(group_code, process_type, length, breadth, height)
 
-                bay_name, breadth, height, weight = self.check_eligibility(group_code, process_type, breadth, height, weight)
+                breadth, height, weight = self.check_eligibility(group_code, process_type, breadth, height, weight)
 
                 workload_h1 = self.generate_workload_h1(group_code, length, breadth)
                 workload_h2 = self.generate_workload_h2(group_code, workload_h1)
@@ -334,7 +317,7 @@ class DataGenerator:
 
             due_date = start_date + duration + post_buffer - 1
 
-            row = [name, id, ship_type, block_type, process_type, bay_name,
+            row = [name, id, ship_type, block_type, process_type,
                    length, breadth, height, weight, workload_h1, workload_h2,
                    start_date, duration, due_date, pre_buffer, post_buffer]
 

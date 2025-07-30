@@ -26,8 +26,8 @@ def evaluate(agent1, agent2, agent3, val_dir, bay_data_path):
     load_deviation_lst = []
 
     with torch.no_grad():
-        for path in val_paths:
-            print(path)
+        for path in val_paths[:1]:
+            # print(path)
             env = Factory(val_dir + path,
                           bay_data_path,
                           device=device,
@@ -59,7 +59,7 @@ def evaluate(agent1, agent2, agent3, val_dir, bay_data_path):
                     next_state_agent2, reward, done = env.step(action_agent1)
                 elif mode == "agent2":
                     if agent2.name == "RL":
-                        action_agent2, _, _ = agent2.get_action(state_agent2)
+                        action_agent2, _, _= agent2.get_action(state_agent2)
                     else:
                         action_agent2 = agent2.act(state_agent2)
 

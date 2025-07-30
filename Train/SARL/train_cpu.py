@@ -33,7 +33,7 @@ class Config():
         self.params["pretrained_model_path_agent1"] = None
         self.params["pretrained_model_path_agent2"] = None
     
-        self.params["num_blocks"]=100
+        self.params["num_blocks"]=200
         self.params["time_horizon"]=30
         self.params["use_fixed_time_horizon"] = True
         self.params["iat_avg"] = 0.1
@@ -41,13 +41,13 @@ class Config():
         self.params["weight_factor"] = 0.7
         self.params["bay_data_path"] = "./input/configurations/bay_data.xlsx"
         self.params["block_data_path"] = "./input/configurations/block_data.xlsx"  # block data
-        # self.params["val_dir"]=None  # directory where the validation data are stored
+        self.params["val_dir"]="./input/validation/"  # directory where the validation data are stored
     
         self.params["algorithm_agent1"]=None  # agent1
         self.params["algorithm_agent2"]="RL"  # agent2
         self.params["algorithm_agent3"]=None  # agent2
     
-        self.params["embed_dim"]=128  # node embedding dimension
+        self.params["embed_dim"]=64  # node embedding dimension
         self.params["num_heads"]=4  #multi-head attention in HGT layers
         self.params["num_HGT_layers"]=2
         self.params["num_actor_layers"]=2
@@ -55,7 +55,7 @@ class Config():
     
         self.params["reward_weight"] = (0.5, 0.5)
         self.params["num_episodes"]=2000
-        self.params["lr"]=0.0001
+        self.params["lr"]=0.001
         self.params["lr_decay"]=1.0
         self.params["lr_step"]=100
         self.params["gamma"]=0.98
@@ -68,8 +68,8 @@ class Config():
         self.params["E_coeff"]=0.01
         self.params['use_value_clipping'] = True
     
-        self.params["eval_every"] = 50
-        self.params["save_every"] = 500
+        self.params["eval_every"] = 10
+        self.params["save_every"] = 100
         self.params["reset_every"] = 1
 
     
@@ -138,7 +138,7 @@ def train(config):
     save_every = config.params['save_every']
     reset_every = config.params['reset_every']
 
-    # val_dir = config.params['val_dir']
+    val_dir = config.params['val_dir']
 
     config.params['ymd'] = time.strftime('%Y%m%d')
     config.params['hour'] = str(time.localtime().tm_hour)
@@ -154,11 +154,12 @@ def train(config):
                                                    config.params['hour'],
                                                    config.params['minute'],
                                                    config.params['second'])
-    val_dir = file_dir + '/%s_%sh_%sm_%ss/validation/' % (config.params['ymd'],
-                                                   config.params['hour'],
-                                                   config.params['minute'],
-                                                   config.params['second'])
+    # val_dir = file_dir + '/%s_%sh_%sm_%ss/validation/' % (config.params['ymd'],
+    #                                                config.params['hour'],
+    #                                                config.params['minute'],
+    #                                                config.params['second'])
 
+    print('File Stored in:',log_dir)
     if not os.path.exists(model_dir):
         os.makedirs(model_dir)
 
@@ -275,6 +276,9 @@ def train(config):
     with open(log_dir + "validation_log.csv", 'w') as f:
         f.write('episode, tardiness, load_deviation\n')
 
+
+
+
     for e in range(1, num_episodes + 1):
         if use_vessl:
             if algorithm_agent1 == "RL":
@@ -286,6 +290,18 @@ def train(config):
                 writer.add_scalar("Training/LearningRate", agent1.scheduler.get_last_lr()[0], e)
             if algorithm_agent2 == "RL":
                 writer.add_scalar("Training/LearningRate", agent2.scheduler.get_last_lr()[0], e)
+
+
+        if e == 1 or e % 10 == 0:
+            # 저장 디렉토리
+            save_path = log_dir + f'Episode{e}_MDP.json'
+
+            # 기존 json 로드 or 초기화
+            if os.path.exists(save_path):
+                with open(save_path, 'r') as f:
+                    json_data = json.load(f)
+            else:
+                json_data = {}
 
         step = 0
         step_agent1 = 0
@@ -320,11 +336,34 @@ def train(config):
                 step_agent2 += 1
 
                 if algorithm_agent2 == "RL":
-                    action_agent2, log_prob_agent2, value_agent2 = agent2.get_action(state_agent2)
+                    action_agent2, log_prob_agent2, value_agent2, probs = agent2.get_action(state_agent2)
+
+                    if e == 1 or e % 10 == 0:
+                        node_feature_0 = state_agent2.graph_feature.node_stores[0]['x'].cpu().tolist()  # shape: [1,8]
+                        node_feature_1 = state_agent2.graph_feature.node_stores[1]['x'].cpu().tolist()  # shape: [17,3]
+
+                        # JSON에 저장할 state 구성
+                        state = {
+                            'node_Block': node_feature_0,
+                            'node_Bay': node_feature_1
+                        }
+                        # action_prob는 예시로 빈 값 설정 (알고리즘 실행 결과로 채울 수 있음)
+                        action_prob = probs.cpu().tolist()  # 예: [0.1, 0.3, 0.6] 처럼 softmax 결과
+
+                        # JSON 데이터에 step 단위로 추가
+                        json_data[str(step_agent2)] = {
+                            'state': state,
+                            'action': action_prob
+                        }
+
+
                 else:
                     action_agent2 = agent2.act(state_agent2)
 
                 next_state_agent3, reward_agent2, done = env.step(action_agent2)
+                # print(f"\tStep{step} action:{action_agent2}")
+                # print(f"\tStep{step} log prob:{log_prob_agent2}")
+                # print(f"\tStep{step} reward:{reward_agent2}")
                 episode_reward += reward_agent2
             elif mode == "agent3":
                 if use_spatial_arrangement:
@@ -370,24 +409,34 @@ def train(config):
                 if done:
                     last_value = 0.0
                 else:
-                    _, _, last_value = agent2.get_action(state_agent2)
+                    _, _, last_value, _ = agent2.get_action(state_agent2)
 
                 if len(agent2.memory.actions) > 0:
+                    # print('Train called')
                     episode_average_loss += agent2.train(last_value)
 
             step += 1
 
             if done:
+
+
                 break
 
-        print("episode: %d | reward: %.4f | loss: %.4f" % (e, episode_reward, episode_average_loss / step))
+        print("episode: %d | reward: %.4f | loss: %.4f" % (e, episode_reward / step, episode_average_loss / step))
+
+        if e == 1 or e % 10 == 0:
+            # JSON 파일 저장
+            with open(save_path, 'w') as f:
+                json.dump(json_data, f, indent=2)
+
+
         with open(log_dir + "train_log.csv", 'a') as f:
             if algorithm_agent1 == "RL":
                 f.write('%d, %1.4f, %1.4f, %f\n'
-                        % (e, episode_reward, episode_average_loss / step, agent1.scheduler.get_last_lr()[0]))
+                        % (e, episode_reward  / step, episode_average_loss / step, agent1.scheduler.get_last_lr()[0]))
             if algorithm_agent2 == "RL":
                 f.write('%d, %1.4f, %1.4f, %f\n'
-                        % (e, episode_reward, episode_average_loss / step, agent2.scheduler.get_last_lr()[0]))
+                        % (e, episode_reward / step, episode_average_loss / step, agent2.scheduler.get_last_lr()[0]))
 
         if use_vessl:
             vessl.log(payload={"Train/Reward": episode_reward,
@@ -402,18 +451,19 @@ def train(config):
         if algorithm_agent2 == "RL":
             agent2.scheduler.step()
 
-        if e == 1 or e % eval_every == 0:
-            average_tardiness, average_load_deviation = evaluate(agent1, agent2, agent3, val_dir, bay_data_path)
-
-            with open(log_dir + "validation_log.csv", 'a') as f:
-                f.write('%d,%1.4f,%1.4f\n' % (e, average_tardiness, average_load_deviation))
-
-            if use_vessl:
-                vessl.log(payload={"Perf/Tardiness": average_tardiness}, step=e)
-                vessl.log(payload={"Perf/LoadDeviation": average_load_deviation}, step=e)
-            else:
-                writer.add_scalar("Validation/Tardiness", average_tardiness, e)
-                writer.add_scalar("Validation/LoadDeviation", average_load_deviation, e)
+        # if e == 1 or e % eval_every == 0:
+        #     average_tardiness, average_load_deviation = evaluate(agent1, agent2, agent3, val_dir, bay_data_path)
+        #     print("\tValidation tardiness : %.4f | load deviation : %.4f" % (average_tardiness, average_load_deviation))
+        #
+        #     with open(log_dir + "validation_log.csv", 'a') as f:
+        #         f.write('%d,%1.4f,%1.4f\n' % (e, average_tardiness, average_load_deviation))
+        #
+        #     if use_vessl:
+        #         vessl.log(payload={"Perf/Tardiness": average_tardiness}, step=e)
+        #         vessl.log(payload={"Perf/LoadDeviation": average_load_deviation}, step=e)
+        #     else:
+        #         writer.add_scalar("Validation/Tardiness", average_tardiness, e)
+        #         writer.add_scalar("Validation/LoadDeviation", average_load_deviation, e)
 
         if e % save_every == 0:
             if algorithm_agent1 == "RL":
