@@ -206,3 +206,8 @@ cython_debug/
 !data/그룹별 duration 변수.xlsx
 !data/그룹별 제원 변수.xlsx
 *.png
+
+parameters.json
+train_log.csv
+validation_log.csv
+Train/SARL/output/

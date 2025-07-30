@@ -73,8 +73,8 @@ class Factory:
         self.eligibility_matrix = self._get_eligibility_matrix()
 
         if agent1 == "RL":
-            self.block_feature_dim_agent1 = 8
-            self.bay_feature_dim_agent1 = 8
+            self.block_feature_dim_agent1 = 6
+            self.bay_feature_dim_agent1 = 3
 
             self.meta_data_agent1 = (
                 ["block", "bay",],
@@ -334,9 +334,28 @@ class Factory:
                 edge_block_to_bay, edge_bay_to_block = [[], []], [[], []]
 
                 # node feature 추가
+                for block in self.blocks:
+                    if block.working_start is None:
+                        block_feature[block.id][0] = 1
+                    elif block.working_finish is None:
+                        block_feature[block.id][1] = 1
+                    else:
+                        block_feature[block.id][2] = 1
+                    block_feature[block.id][3] = block.duration
+                    block_feature[block.id][4] = int(self.df_blocks["post_buffer"][block.id])
+                    block_feature[block.id][5] = max(0, block.due_date-(self.sim_env.now+block.duration))
+                for bay in self.bays.values():
+                    if bay.occupied_space <= (bay.length * bay.breadth) * 0.8:
+                        bay_feature[bay.id][0] = 1
+                    else:
+                        bay_feature[bay.id][1] = 1
+                    remain_proc_list = [block.start_date+block.duration-self.sim_env.now for block in bay.blocks_in_bay.values()]
+                    if remain_proc_list:
+                        bay_feature[bay.id][2] = sum(remain_proc_list)/len(remain_proc_list)
+                    else:
+                        bay_feature[bay.id][2] = 0
 
-
-                # block 노드와 bay 노드 간 엣지 구성
+                        # block 노드와 bay 노드 간 엣지 구성
                 for _, block_info in self.df_blocks.iterrows():
                     if block_info["start_date"] > self.sim_env.now:
                         continue
@@ -370,7 +389,6 @@ class Factory:
                 graph_feature["block", "block_to_block", "block"].edge_index = edge_block_to_block
                 graph_feature["block", "block_to_bay", "bay"].edge_index = edge_block_to_bay
                 graph_feature["bay", "bay_to_block", "block"].edge_index = edge_bay_to_block
-
             else:
                 priority_idx = np.zeros(self.num_blocks)
 
@@ -633,8 +651,8 @@ if __name__ == '__main__':
     agent3 = BLHeuristic(algorithm_agent3)
 
     # data_src = DataGenerator()
-    block_data_src = "../input/block_data.xlsx"
-    bay_data_src = "../input/bay_config.xlsx"
+    block_data_src = "C:/python_project/2025_MAS_KSOE/input/configurations/block_data.xlsx"
+    bay_data_src = "C:/python_project/2025_MAS_KSOE/input/configurations/bay_config.xlsx"
     env = Factory(block_data_src,
                   bay_data_src,
                   agent1=algorithm_agent1,
